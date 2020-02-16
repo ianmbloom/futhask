@@ -44,7 +44,6 @@ readHeader fn = fmap (fst . head
 
 varTable = 
     [ ("int", "Int")
-    , ("half", "Half")
     , ("float", "Float")
     , ("double", "Double")
     , ("char", "Word8")
@@ -61,6 +60,20 @@ varTable =
     , ("size_t", "CSize")
     , ("cl_mem", "CL_mem")
     , ("cl_command_queue", "CL_command_queue") ]
+
+
+varTable2 = 
+    [ ("f32", "Float")
+    , ("f64", "Double")
+    , ("bool", "CBool")
+    , ("i8" , "Int8")
+    , ("i16", "Int16")
+    , ("i32", "Int32")
+    , ("i64", "Int64")
+    , ("u8" , "Word8")
+    , ("u16", "Word16")
+    , ("u32", "Word32")
+    , ("u64", "Word64") ]
 
 capitalize (c:cs) = toUpper c:cs
 wrapIfNotOneWord s = if elem ' ' s then "(" ++ s ++ ")" else s
@@ -93,26 +106,73 @@ rawImportString headerItems = intercalate "\n" $
     , "module FutharkImports.Raw where"
     , "import Data.Int (Int8, Int16, Int32, Int64)"
     , "import Data.Word (Word8)"
+    , "import Foreign.CTypes (CBool)"
     , "import Foreign.Ptr (Ptr)" ]
     ++ map haskellDeclaration headerItems
 
-ioWrapper (Var (_, n))
-    = "newtype " ++ cn ++ " = " ++ cn ++ " (F.ForeignPtr Raw." ++ cn ++ ")\n"
-    ++"instance FutharkObject " ++ cn ++ " where\n"
-    ++"  freeFO = Raw.free_" ++ sn ++ "\n"
-    ++"  withFO (" ++ cn ++ " fp) = F.withForeignPtr fp"
-    ++ if isArray
-            then "instance FutharkArray " ++ cn ++" where\n"
-              ++ "  shape  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
-              ++ "  new    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
-              ++ "  values = Raw.values_" ++ sn ++ "\n"
-            else ""
-    where cn = capitalize n
+instanceDeclarations (Var (_, n))
+    =  (if isObject then objectString else "") 
+    ++ (if isArray  then arrayString  else "")
+    where cn = capitalize sn
           sn = drop 8 n
-          isArray = take 7 sn /= "context" && take 6 sn /= "opaque"
+          isObject = take 7 sn /= "context" 
+          isArray = isObject && take 6 sn /= "opaque"
           dim = if isArray 
                     then read $ (:[]) $ last $ init sn
-                    else 0 
+                    else 0
+          element = if isArray
+                        then case lookup (takeWhile (/= '_') sn) varTable2 of
+                                (Just t) -> t
+                                Nothing  -> error $ "ArrayType" ++ sn ++ " not found."
+                        else ""
+          arrayString = "instance FutharkArray (" ++ cn ++ " c) M.Sz" ++ show dim ++ " " ++ element ++ " where\n"
+                     ++ "  shape  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
+                     ++ "  new    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
+                     ++ "  values = Raw.values_" ++ sn ++ "\n"
+          objectString = "\nnewtype " ++ cn ++ " c = " ++ cn ++ " (F.ForeignPtr Raw." ++ cn ++ ")\n"
+                      ++ "instance FutharkObject (" ++ cn ++ " c) Raw." ++ cn ++ " where\n"
+                      ++ "  wrapper = " ++ cn ++ "\n"
+                      ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
+                      ++ "  withFO (" ++ cn ++ " fp) = F.withForeignPtr fp\n"
+
+instanceDeclarations _ = ""
+
+instanceDeclarationString headerItems = concat $
+    [ "{-# LANGUAGE RankNTypes #-}"
+    , "module Instances\n"
+    , "import Context\n"
+    , "import Objects\n"
+    , "import qualified Raw\n"
+    , "import qualified Data.Massiv.Array as M\n"]
+    ++ map instanceDeclarations headerItems
+
+entryCall (Fun (_, n) args) 
+    = if isEntry 
+        then "\n" ++ input ++ preCall ++ call ++ postCall
+        else ""
+    where
+        sn = drop 8 n
+        isEntry = take 5 sn == "entry"
+        isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable 
+                    of Just _ -> False; Nothing -> True; 
+        (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
+        input = unwords (sn : map snd inArgs) ++ " = unsafeLiftFromIO $ \\context\n  -> "
+        preCall = concat 
+                $ map (\i -> "withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
+               ++ map (\o -> "malloc >>= $ \\" ++ snd o ++ "\n  -> ") outArgs 
+        call = "inContextWithError context (\\c -> Raw." ++ sn ++ " c " 
+            ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
+        postCall = concatMap (\o -> (if isFO o then "peekFreeAndWrap " else "peekAndFree ") 
+                ++ snd o ++ " >>= \\" ++ snd o ++ "'\n  -> ") outArgs
+                ++ "return " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> snd o ++ "'") outArgs) ++ "\n"
+
+entryCall _ = ""
+        
+entryCallString headerItems = concat $
+    [ "{-# LANGUAGE #-}\n"
+    , "import Context\n"
+    , "import FT\n" ]
+    ++ map entryCall headerItems
 {--
 wrapper (Type s) = "type " ++ capitalize (drop 8 s) ++ "= ForeignPtr " ++ capitalize s
 wrapper (Function (name, ot) args) = 
@@ -130,6 +190,8 @@ main = do
     putStrLn "test"
     --text <- readFile "rigid.h"
     --mapM_ (putStrLn.declaration.parseLine) $ cleanLines $ lines text
-    readHeader "rigid.h" >>= putStrLn.rawImportString
-
+    header <- readHeader "rigid.h"
+    putStrLn $ rawImportString header
+    putStrLn $ instanceDeclarationString header
+    putStrLn $ entryCallString header
 
