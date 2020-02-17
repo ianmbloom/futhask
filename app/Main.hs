@@ -139,52 +139,91 @@ instanceDeclarations _ = ""
 
 instanceDeclarationString headerItems = concat $
     [ "{-# LANGUAGE RankNTypes #-}"
-    , "module Instances\n"
-    , "import Context\n"
-    , "import Objects\n"
-    , "import qualified Raw\n"
+    , "module Types where\n"
+    , "import " ++ moduleName ++ ".Context\n"
+    , "import " ++ moduleName ++ ".Objects\n"
+    , "import qualified " ++ moduleName ++ ".Raw as Raw\n"
+    , "import qualified Foreign as F\n"
     , "import qualified Data.Massiv.Array as M\n"]
     ++ map instanceDeclarations headerItems
 
+haskellType' s = 
+    let pn = length $ dropWhile (/='*') s
+        ts = dropWhile (=="const") $ words $ takeWhile (/='*') s
+     in if head ts == "struct" 
+            then capitalize (drop 8 $ ts !! 1) ++ " c"
+            else (case lookup (head ts) varTable of 
+                    Just s -> s; 
+                    Nothing -> error $ "type " ++ s ++ "not found";)
+
 entryCall (Fun (_, n) args) 
     = if isEntry 
-        then "\n" ++ input ++ preCall ++ call ++ postCall
+        then "\n" ++ typeDeclaration ++ input ++ preCall ++ call ++ postCall
         else ""
     where
         sn = drop 8 n
         isEntry = take 5 sn == "entry"
+        en = drop 6 sn
         isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable 
                     of Just _ -> False; Nothing -> True; 
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
-        input = unwords (sn : map snd inArgs) ++ " = unsafeLiftFromIO $ \\context\n  -> "
+         typeDeclaration = en ++ "\n  :: " 
+                       ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
+                       ++ "FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+        input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
-                $ map (\i -> "withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
-               ++ map (\o -> "malloc >>= $ \\" ++ snd o ++ "\n  -> ") outArgs 
-        call = "inContextWithError context (\\c -> Raw." ++ sn ++ " c " 
+                $ map (\i -> "C.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
+               ++ map (\o -> "F.malloc >>= $ \\" ++ snd o ++ "\n  -> ") outArgs 
+        call = "C.inContextWithError context (\\context'\n  -> Raw." ++ sn ++ " context' " 
             ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
-        postCall = concatMap (\o -> (if isFO o then "peekFreeAndWrap " else "peekAndFree ") 
-                ++ snd o ++ " >>= \\" ++ snd o ++ "'\n  -> ") outArgs
-                ++ "return " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> snd o ++ "'") outArgs) ++ "\n"
+        peek o = if isFO o then "C.peekFreeWrap " else "C.peekFree "
+        postCall = (if length outArgs > 1
+                        then  concatMap (\o -> peek o ++ snd o ++ " >>= \\" ++ snd o ++ "'\n  -> ") outArgs
+                          ++ "return " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> snd o ++ "'") outArgs)
+                        else peek (head outArgs) ++ snd (head outArgs))
+                ++ "\n"
 
 entryCall _ = ""
         
-entryCallString headerItems = concat $
-    [ "{-# LANGUAGE #-}\n"
-    , "import Context\n"
-    , "import FT\n" ]
+entryCallString moduleName headerItems = concat $
+    --[ "{-# LANGUAGE #-}\n"
+    [ "module Entries where\n"
+    , "import qualified " ++ moduleName ++ ".Context as C\n"
+    , "import qualified " ++ moduleName ++ ".FT as FT\n"
+    , "import qualified " ++ moduleName ++ ".Raw as Raw\n"
+    , "import " ++ moduleName ++ ".Types\n"
+    , "import qualified Foreign as F\n" ]
     ++ map entryCall headerItems
-{--
-wrapper (Type s) = "type " ++ capitalize (drop 8 s) ++ "= ForeignPtr " ++ capitalize s
-wrapper (Function (name, ot) args) = 
-    let preCall = catMaybes
-                $ map (\arg -> case arg of
-                      ()) args
-        baseCall = 
-        call = case ot of
-            "()" -> baseCall
-            "()"
-        postCall = 
---}
+
+data Import = N String | Q String String
+
+globalImport (N m) = "import " ++ m ++ "\n"
+globalImport (Q m a) = "import qualified " ++ m ++ " as " ++ a ++ "\n"
+localImport moduleName (N sub) = globalImport $ N (moduleName ++ "." ++ sub)
+localImport moduleName (Q sub a) = globalImport $ Q (moduleName ++ "." ++ sub) a
+
+haskellHeader extensions localImports globalImports subModuleName moduleName
+    =  (if length extensions > 1 
+        then "{-# LANGUAGE " ++ intercalate ", " extensions ++ " #-}" 
+        else "")
+    ++ "\nmodule " ++ moduleName ++ (case subModuleName of Nothing -> ""; Just n -> '.':n) ++ " where\n"
+    ++ concatMap (localImport moduleName) localImports
+    ++ concatMap globalImport globalImports
+
+rawHeader     = haskellHeader ["ForeignFunctionInterface"] [] 
+    [ N "Data.Int (Int8, Int16, Int32, Int64)"
+    , N "Data.Word (Word8, Word16, Word32 Word64)"
+    , N "Foreign.CTypes (CBool)"
+    , N "Foreign.Ptr (Ptr)" ] (Just "Raw")
+entryHeader   = haskellHeader [] [Q "Raw" "Raw", Q "Context" "C", Q "FT" "FT"] [Q "Foreign" "F"] (Just "Entries")
+configHeader  = haskellHeader [] [Q "Raw" "Raw"] [] (Just"Config")
+contextHeader = haskellHeader ["RankNTypes"] [] [] (Just "Context")
+objectHeader  = haskellHeader ["RankNTypes"] [] [] (Just "Object")
+typesHeader   = haskellHeader ["RankNTypes"] [] [] (Just "Object")
+fTHeader      = haskellHeader [] [N "Context"] [] (Just "FT (runFTIn, runFTWith, runFT, unsafeLiftFromIO)")
+exportHeader  = haskellHeader [] [] [] Nothing
+
+
 main :: IO ()
 main = do
     putStrLn "test"
