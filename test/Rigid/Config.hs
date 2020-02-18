@@ -1,6 +1,6 @@
 
-module TestModule.Config where
-import qualified TestModule.Raw as Raw
+module Rigid.Config where
+import qualified Rigid.Raw as Raw
 
 data ContextOption
     = BuildOptions [String]

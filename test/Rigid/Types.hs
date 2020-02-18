@@ -1,7 +1,8 @@
 {-# LANGUAGE RankNTypes, ExistentialQuantification #-}
-module TestModule.Types where
-import qualified TestModule.Raw as Raw
-import TestModule.Utils
+module Rigid.Types where
+import qualified Rigid.Raw as Raw
+import Rigid.Utils
+import Rigid.TypeClasses
 
 newtype F32_1d c = F32_1d (F.ForeignPtr Raw.F32_1d)
 instance FutharkObject (F32_1d c) Raw.F32_1d where

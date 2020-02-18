@@ -8,6 +8,7 @@ import Data.List (intercalate, partition, lookup)
 import Data.Char (toUpper)
 import Text.ParserCombinators.ReadP
 import System.Directory
+import System.Environment
 
 data HeaderItem 
     = Preproc String
@@ -137,7 +138,7 @@ haskellType' s =
     let pn = length $ dropWhile (/='*') s
         ts = dropWhile (=="const") $ words $ takeWhile (/='*') s
      in if head ts == "struct" 
-            then capitalize (drop 8 $ ts !! 1) ++ " c"
+            then "T." ++ capitalize (drop 8 $ ts !! 1) ++ " c"
             else (case lookup (head ts) varTable of 
                     Just s -> s; 
                     Nothing -> error $ "type " ++ s ++ "not found";)
@@ -158,11 +159,11 @@ entryCall (Fun (_, n) args)
                        ++ "FT.FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
         input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
-                $ map (\i -> "C.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
+                $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
                ++ map (\o -> "F.malloc >>= $ \\" ++ snd o ++ "\n  -> ") outArgs 
         call = "C.inContextWithError context (\\context'\n  -> Raw." ++ sn ++ " context' " 
             ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
-        peek o = if isFO o then "C.peekFreeWrap " else "C.peekFree "
+        peek o = if isFO o then "U.peekFreeWrapIn context " else "U.peekFree "
         postCall = (if length outArgs > 1
                         then  concatMap (\o -> peek o ++ snd o ++ " >>= \\" ++ snd o ++ "'\n  -> ") outArgs
                           ++ "return " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> snd o ++ "'") outArgs)
@@ -180,28 +181,37 @@ globalImport (Q m a) = "import qualified " ++ m ++ " as " ++ a ++ "\n"
 localImport moduleName (N sub) = globalImport $ N (moduleName ++ "." ++ sub)
 localImport moduleName (Q sub a) = globalImport $ Q (moduleName ++ "." ++ sub) a
 
-haskellHeader moduleName subModuleName extensions localImports globalImports
+haskellHeader moduleName subModuleName exports extensions localImports globalImports
     =  (if length extensions > 0 
         then "{-# LANGUAGE " ++ intercalate ", " extensions ++ " #-}" 
         else "")
-    ++ "\nmodule " ++ moduleName ++ (case subModuleName of Nothing -> ""; Just n -> '.':n) ++ " where\n"
+    ++ "\nmodule " 
+    ++ moduleName ++ (case subModuleName of Nothing -> ""; Just n -> '.':n)
+    ++ (if length exports > 0 then " (" ++ intercalate ", " exports ++ ")" else "")
+    ++ " where\n"
     ++ concatMap (localImport moduleName) localImports
     ++ concatMap globalImport globalImports
 
-writeModule directory moduleName subModuleName extensions localImports globalImports body 
+writeModule directory moduleName subModuleName exports extensions localImports globalImports body 
     = writeFile fn string
     where fn = directory ++ "/" ++ moduleName ++ (case subModuleName of Just n -> "/" ++ n; Nothing -> "") ++ ".hs"
-          string = haskellHeader moduleName subModuleName extensions localImports globalImports ++ body
+          string = haskellHeader moduleName subModuleName exports extensions localImports globalImports ++ body
 
 main :: IO ()
 main = do
-    putStrLn "test"
-    --text <- readFile "rigid.h"
-    --mapM_ (putStrLn.declaration.parseLine) $ cleanLines $ lines text
-    header <- readHeader "rigid.h"
-    createDirectoryIfMissing False (directory ++ "/" ++ moduleName)
-    mapM_ (\(smn, exts, lis, gis, b) -> writeModule directory moduleName smn exts lis gis b) 
+    (backend: headerName: srcDir: moduleName: _) <- getArgs
+    header <- readHeader headerName
+
+    typeClassesBody <- readFile $ refDir ++ "/TypeClasses.hs"
+    configBody      <- readFile $ refDir ++ "/Config." ++ backend ++ ".hs"
+    contextBody     <- readFile $ refDir ++ "/Context.hs"
+    fTBody          <- readFile $ refDir ++ "/FT.hs"
+    utilsBody       <- readFile $ refDir ++ "/Utils.hs"
+    
+    createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
+    mapM_ (\(smn, exps, exts, lis, gis, body) -> writeModule srcDir moduleName smn exps exts lis gis body) 
         [ ( Just "Raw"
+          , []
           , ["ForeignFunctionInterface"]
           , [] 
           , [ N "Data.Int (Int8, Int16, Int32, Int64)"
@@ -209,43 +219,53 @@ main = do
             , N "Foreign.CTypes (CBool)"
             , N "Foreign.Ptr (Ptr)" ]
           , rawImportString header )
+        , ( Just "TypeClasses"
+          , ["FutharkObject", "FutharkArray", "Input", "Output"]
+          , ["MultiParamTypeClasses"]
+          , [Q "Raw" "Raw"]
+          , []
+          , typeClassesBody ) 
         , ( Just "Config"
           , []
+          , []
           , [Q "Raw" "Raw"]
           , []
-          , "" ) 
+          , configBody ) 
         , ( Just "Context"
-          , ["RankNTypes"]
+          , []
+          , []
           , [Q "Raw" "Raw"]
           , []
-          , "" )
-        , ( Just "FT (runFTIn, runFTWith, runFT, unsafeLiftFromIO)"
+          , contextBody )
+        , ( Just "FT"
+          , ["runFTIn", "runFTWith", "runFT", "unsafeLiftFromIO"]
           , ["RankNTypes"]
           , [N "Context"]
+          , [N "System.IO.Unsafe"]
+          , fTBody ) 
+        , ( Just "Utils"
           , []
-          , "" ) 
-        , ( Just "Object"
           , ["RankNTypes"]
-          , [Q "Raw" "Raw", N "Context", N "FT"]
+          , [Q "Raw" "Raw", N "Context", N "FT", N "TypeClasses"]
           , [Q "Data.Massiv.Array" "M"]
-          , "" )
+          , utilsBody )
         , ( Just "Types"
-          , ["RankNTypes"]
-          , [Q "Raw" "Raw", N "Object"]
+          , []
+          , ["RankNTypes", "ExistentialQuantification"]
+          , [Q "Raw" "Raw", N "Utils", N "TypeClasses"]
           , []
           , instanceDeclarationString header )
         , ( Just "Entries"
           , []
-          , [Q "Raw" "Raw"
-          , Q "Context" "C"
-          , Q "FT" "FT", N "Types"]
+          , []
+          , [Q "Raw" "Raw", Q "Context" "C", Q "FT" "FT", Q "Utils" "U", Q "Types" "T"]
           , [Q "Foreign" "F"]
           , entryCallString header ) 
         , ( Nothing
+          , ["module Context", "module Config", "module TypeClasses", "module FT"]
           , []
-          , [N "Context", N "Object", N "FT"]
+          , [N "Context", N "Config hiding (setOption)", N "TypeClasses hiding (FutharkObject, FutharkArray)", N "FT"]
           , []
           , "" ) ]
-    where moduleName = "TestModule"
-          directory = "testDir"
-
+    where refDir = "code"
+         

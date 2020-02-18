@@ -1,10 +1,10 @@
 
-module TestModule.Entries where
-import qualified TestModule.Raw as Raw
-import qualified TestModule.Context as C
-import qualified TestModule.FT as FT
-import qualified TestModule.Utils as U
-import qualified TestModule.Types as T
+module Rigid.Entries where
+import qualified Rigid.Raw as Raw
+import qualified Rigid.Context as C
+import qualified Rigid.FT as FT
+import qualified Rigid.Utils as U
+import qualified Rigid.Types as T
 import qualified Foreign as F
 
 rodNetworkPairInteraction

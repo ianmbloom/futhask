@@ -1,14 +1,4 @@
 
-module FT 
-    ( runFTIn
-    , runFTWith
-    , runFT
-    , unsafeLiftFromIO )
-         where
-
-import Context
-import System.IO.Unsafe
-
 newtype FT c a = FT (Context -> a)
 
 instance Functor (FT c) where
@@ -29,4 +19,4 @@ runFTWith options a = unsafePerformIO $ (flip runFTIn) a <$> getContext options
 runFT = runFTWith []
 
 unsafeLiftFromIO :: (Context -> IO a) -> FT c a
-unsafeLiftFromIO a = FT $ (\c -> unsafePerformIO $ a c)
+unsafeLiftFromIO a = FT (\c -> unsafePerformIO $ a c)

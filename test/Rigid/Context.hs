@@ -1,6 +1,6 @@
 
-module TestModule.Context where
-import qualified TestModule.Raw as Raw
+module Rigid.Context where
+import qualified Rigid.Raw as Raw
 
 data Context = Context (ForeignPtr Raw.Context)
 
