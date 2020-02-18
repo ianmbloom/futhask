@@ -7,6 +7,7 @@ import Debug.Trace
 import Data.List (intercalate, partition, lookup)
 import Data.Char (toUpper)
 import Text.ParserCombinators.ReadP
+import System.Directory
 
 data HeaderItem 
     = Preproc String
@@ -101,14 +102,7 @@ haskellDeclaration (Fun (ot, name) args)
        ++ ["IO " ++ wrapIfNotOneWord (haskellType ot)] )
     ++ "\n"
 
-rawImportString headerItems = intercalate "\n" $ 
-    [ "{-# LANGUAGE ForeignFunctionInterface #-}"
-    , "module FutharkImports.Raw where"
-    , "import Data.Int (Int8, Int16, Int32, Int64)"
-    , "import Data.Word (Word8)"
-    , "import Foreign.CTypes (CBool)"
-    , "import Foreign.Ptr (Ptr)" ]
-    ++ map haskellDeclaration headerItems
+rawImportString headerItems = intercalate "\n" $ map haskellDeclaration headerItems
 
 instanceDeclarations (Var (_, n))
     =  (if isObject then objectString else "") 
@@ -137,15 +131,7 @@ instanceDeclarations (Var (_, n))
 
 instanceDeclarations _ = ""
 
-instanceDeclarationString headerItems = concat $
-    [ "{-# LANGUAGE RankNTypes #-}"
-    , "module Types where\n"
-    , "import " ++ moduleName ++ ".Context\n"
-    , "import " ++ moduleName ++ ".Objects\n"
-    , "import qualified " ++ moduleName ++ ".Raw as Raw\n"
-    , "import qualified Foreign as F\n"
-    , "import qualified Data.Massiv.Array as M\n"]
-    ++ map instanceDeclarations headerItems
+instanceDeclarationString headerItems = concatMap instanceDeclarations headerItems
 
 haskellType' s = 
     let pn = length $ dropWhile (/='*') s
@@ -167,9 +153,9 @@ entryCall (Fun (_, n) args)
         isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable 
                     of Just _ -> False; Nothing -> True; 
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
-         typeDeclaration = en ++ "\n  :: " 
+        typeDeclaration = en ++ "\n  :: " 
                        ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+                       ++ "FT.FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
         input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
                 $ map (\i -> "C.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
@@ -185,15 +171,7 @@ entryCall (Fun (_, n) args)
 
 entryCall _ = ""
         
-entryCallString moduleName headerItems = concat $
-    --[ "{-# LANGUAGE #-}\n"
-    [ "module Entries where\n"
-    , "import qualified " ++ moduleName ++ ".Context as C\n"
-    , "import qualified " ++ moduleName ++ ".FT as FT\n"
-    , "import qualified " ++ moduleName ++ ".Raw as Raw\n"
-    , "import " ++ moduleName ++ ".Types\n"
-    , "import qualified Foreign as F\n" ]
-    ++ map entryCall headerItems
+entryCallString headerItems = concatMap entryCall headerItems
 
 data Import = N String | Q String String
 
@@ -202,27 +180,18 @@ globalImport (Q m a) = "import qualified " ++ m ++ " as " ++ a ++ "\n"
 localImport moduleName (N sub) = globalImport $ N (moduleName ++ "." ++ sub)
 localImport moduleName (Q sub a) = globalImport $ Q (moduleName ++ "." ++ sub) a
 
-haskellHeader extensions localImports globalImports subModuleName moduleName
-    =  (if length extensions > 1 
+haskellHeader moduleName subModuleName extensions localImports globalImports
+    =  (if length extensions > 0 
         then "{-# LANGUAGE " ++ intercalate ", " extensions ++ " #-}" 
         else "")
     ++ "\nmodule " ++ moduleName ++ (case subModuleName of Nothing -> ""; Just n -> '.':n) ++ " where\n"
     ++ concatMap (localImport moduleName) localImports
     ++ concatMap globalImport globalImports
 
-rawHeader     = haskellHeader ["ForeignFunctionInterface"] [] 
-    [ N "Data.Int (Int8, Int16, Int32, Int64)"
-    , N "Data.Word (Word8, Word16, Word32 Word64)"
-    , N "Foreign.CTypes (CBool)"
-    , N "Foreign.Ptr (Ptr)" ] (Just "Raw")
-entryHeader   = haskellHeader [] [Q "Raw" "Raw", Q "Context" "C", Q "FT" "FT"] [Q "Foreign" "F"] (Just "Entries")
-configHeader  = haskellHeader [] [Q "Raw" "Raw"] [] (Just"Config")
-contextHeader = haskellHeader ["RankNTypes"] [] [] (Just "Context")
-objectHeader  = haskellHeader ["RankNTypes"] [] [] (Just "Object")
-typesHeader   = haskellHeader ["RankNTypes"] [] [] (Just "Object")
-fTHeader      = haskellHeader [] [N "Context"] [] (Just "FT (runFTIn, runFTWith, runFT, unsafeLiftFromIO)")
-exportHeader  = haskellHeader [] [] [] Nothing
-
+writeModule directory moduleName subModuleName extensions localImports globalImports body 
+    = writeFile fn string
+    where fn = directory ++ "/" ++ moduleName ++ (case subModuleName of Just n -> "/" ++ n; Nothing -> "") ++ ".hs"
+          string = haskellHeader moduleName subModuleName extensions localImports globalImports ++ body
 
 main :: IO ()
 main = do
@@ -230,7 +199,53 @@ main = do
     --text <- readFile "rigid.h"
     --mapM_ (putStrLn.declaration.parseLine) $ cleanLines $ lines text
     header <- readHeader "rigid.h"
-    putStrLn $ rawImportString header
-    putStrLn $ instanceDeclarationString header
-    putStrLn $ entryCallString header
+    createDirectoryIfMissing False (directory ++ "/" ++ moduleName)
+    mapM_ (\(smn, exts, lis, gis, b) -> writeModule directory moduleName smn exts lis gis b) 
+        [ ( Just "Raw"
+          , ["ForeignFunctionInterface"]
+          , [] 
+          , [ N "Data.Int (Int8, Int16, Int32, Int64)"
+            , N "Data.Word (Word8, Word16, Word32 Word64)"
+            , N "Foreign.CTypes (CBool)"
+            , N "Foreign.Ptr (Ptr)" ]
+          , rawImportString header )
+        , ( Just "Config"
+          , []
+          , [Q "Raw" "Raw"]
+          , []
+          , "" ) 
+        , ( Just "Context"
+          , ["RankNTypes"]
+          , [Q "Raw" "Raw"]
+          , []
+          , "" )
+        , ( Just "FT (runFTIn, runFTWith, runFT, unsafeLiftFromIO)"
+          , ["RankNTypes"]
+          , [N "Context"]
+          , []
+          , "" ) 
+        , ( Just "Object"
+          , ["RankNTypes"]
+          , [Q "Raw" "Raw", N "Context", N "FT"]
+          , [Q "Data.Massiv.Array" "M"]
+          , "" )
+        , ( Just "Types"
+          , ["RankNTypes"]
+          , [Q "Raw" "Raw", N "Object"]
+          , []
+          , instanceDeclarationString header )
+        , ( Just "Entries"
+          , []
+          , [Q "Raw" "Raw"
+          , Q "Context" "C"
+          , Q "FT" "FT", N "Types"]
+          , [Q "Foreign" "F"]
+          , entryCallString header ) 
+        , ( Nothing
+          , []
+          , [N "Context", N "Object", N "FT"]
+          , []
+          , "" ) ]
+    where moduleName = "TestModule"
+          directory = "testDir"
 
