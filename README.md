@@ -21,16 +21,20 @@ The generated code can be split in two main parts, raw and wrapped. The raw is s
 ### Context Generation
     getContext :: [ContextOptions] -> IO Context
 
-Available contextoptions will depend on backend used
+Available context options will depend on backend used.
 
 ### The FT monad
 To make the wrappers safe, and reduce clutter from explicitly passing around the context the FT-monad is introduced. The FT-monad is an environment (Reader) monad that implicitly passes the context around as necessary. Like the ST-monad, the FT-monad is parameterised by a rigid type variable to prevent references to the context from escaping the monad.
 
-To run the monad the function
+To run the computation, the function
+
     runFTIn :: Context -> (forall c. FT c a) -> a
+
 is used. Additionally
+
     runFTWith :: [ContextOptions] -> (forall c. FT c a) -> a
     runFT :: (forall c. FT c a) -> a
+
 are defined for convienience in the case that the context doesn't need to be reused.
 
 ### Input and Output
