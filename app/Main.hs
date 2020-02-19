@@ -19,12 +19,15 @@ writeModule backend directory moduleName (subModuleName, headerF, body)
 
 main :: IO ()
 main = do
-    (backendS : headerName : srcDir : moduleName : _) <- getArgs
+    args <- getArgs
+    [ backendS, headerName, srcDir, moduleName ] <- getArgs >>= \args -> case args of
+         [a, b, c, d] -> return args
+         _            -> error "futhask takes four arguments:\n - backend (c, opencl, cuda)\n - Futhark header file\n - Haskell source directory\n - module name"
     backend <- case backendS of
         "c"      -> return C
         "opencl" -> return OpenCL
         "cuda"   -> return Cuda
-        _        -> error $ "unknown backend: " ++ backendS
+        _        -> error $ "unknown backend: " ++ backendS ++ "\n  available backends: c, opencl, cuda"
     header <- readHeader headerName
     
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
