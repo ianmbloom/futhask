@@ -1,22 +1,22 @@
 
-class FutharkObject wrapped raw | wrapped -> raw where
-    wrapper :: ForeignPtr raw -> wrapped
+class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
+    wrapFO :: ForeignPtr raw -> wrapped c
     freeFO :: Ptr Raw.Futhark_context -> Ptr raw -> IO Int
-    withFO :: wrapped -> (Ptr raw -> IO b) -> IO b
+    withFO :: wrapped c -> (Ptr raw -> IO b) -> IO b
     
 
 
-class (FutharkObject array rawArray, Storable element, Index dim) 
-    => FutharkArray array dim element 
+class (FutharkObject array rawArray, Storable element, M.Index dim) 
+    => FutharkArray array rawArray dim element 
     | array -> dim, array -> element 
     where
-        shape :: Ptr Raw.Futhark_context -> Ptr rawArray -> IO dim 
-        new :: Ptr Raw.Futhark_context -> Ptr element -> dim -> IO (Ptr rawArray)
-        values :: Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int 
+        shapeFA  :: Ptr Raw.Futhark_context -> Ptr rawArray -> IO (M.Sz dim)
+        newFA    :: Ptr Raw.Futhark_context -> Ptr element -> M.Sz dim -> IO (Ptr rawArray)
+        valuesFA :: Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int 
 
-class Input c fo ho where
-    toFuthark :: ho -> FT c fo
+class Input fo ho where
+    toFuthark :: ho -> FT c fo 
 
-class Output c fo ho where
+class Output fo ho where
     fromFuthark :: fo -> FT c ho
 

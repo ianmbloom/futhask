@@ -15,8 +15,16 @@ instance Monad (FT c) where
 runFTIn :: Context -> (forall c. FT c a) -> a
 runFTIn context (FT a) = a context
 
-runFTWith options a = unsafePerformIO $ (flip runFTIn) a <$> getContext options 
+
+runFTWith :: [ContextOption] -> (forall c. FT c a) -> a
+runFTWith options a 
+    = unsafePerformIO 
+    $ getContext options >>= \c -> return $ runFTIn c a 
 runFT = runFTWith []
+
+-- placeholders
+--runFTWith = id
+--runFT = id
 
 unsafeLiftFromIO :: (Context -> IO a) -> FT c a
 unsafeLiftFromIO a = FT (\c -> unsafePerformIO $ a c)

@@ -48,7 +48,7 @@ varTable =
     [ ("int", "Int")
     , ("float", "Float")
     , ("double", "Double")
-    , ("char", "Word8")
+    , ("char", "CChar")
     , ("bool", "CBool")
     , ("void", "()")
     , ("int8_t" , "Int8")
@@ -60,8 +60,8 @@ varTable =
     , ("uint32_t", "Word32")
     , ("uint64_t", "Word64")
     , ("size_t", "CSize")
-    , ("cl_mem", "CL_mem")
-    , ("cl_command_queue", "CL_command_queue") ]
+    , ("cl_mem", "CLMem")
+    , ("cl_command_queue", "CLCommandQueue") ]
 
 
 varTable2 = 
@@ -109,6 +109,7 @@ instanceDeclarations (Var (_, n))
     =  (if isObject then objectString else "") 
     ++ (if isArray  then arrayString  else "")
     where cn = capitalize sn
+          rn = capitalize n
           sn = drop 8 n
           isObject = take 7 sn /= "context" 
           isArray = isObject && take 6 sn /= "opaque"
@@ -120,13 +121,14 @@ instanceDeclarations (Var (_, n))
                                 (Just t) -> t
                                 Nothing  -> error $ "ArrayType" ++ sn ++ " not found."
                         else ""
-          arrayString = "instance FutharkArray (" ++ cn ++ " c) M.Sz" ++ show dim ++ " " ++ element ++ " where\n"
-                     ++ "  shape  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
-                     ++ "  new    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
-                     ++ "  values = Raw.values_" ++ sn ++ "\n"
-          objectString = "\nnewtype " ++ cn ++ " c = " ++ cn ++ " (F.ForeignPtr Raw." ++ cn ++ ")\n"
-                      ++ "instance FutharkObject (" ++ cn ++ " c) Raw." ++ cn ++ " where\n"
-                      ++ "  wrapper = " ++ cn ++ "\n"
+          arrayString = "instance FutharkArray "++ cn ++ " Raw."++ rn 
+                     ++ " M.Ix" ++ show dim ++ " " ++ element ++ " where\n"
+                     ++ "  shapeFA  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
+                     ++ "  newFA    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
+                     ++ "  valuesFA = Raw.values_" ++ sn ++ "\n"
+          objectString = "\nnewtype " ++ cn ++ " c = " ++ cn ++ " (F.ForeignPtr Raw." ++ rn ++ ")\n"
+                      ++ "instance FutharkObject " ++ cn ++ " Raw." ++ rn ++ " where\n"
+                      ++ "  wrapFO = " ++ cn ++ "\n"
                       ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
                       ++ "  withFO (" ++ cn ++ " fp) = F.withForeignPtr fp\n"
 
@@ -138,7 +140,7 @@ haskellType' s =
     let pn = length $ dropWhile (/='*') s
         ts = dropWhile (=="const") $ words $ takeWhile (/='*') s
      in if head ts == "struct" 
-            then "T." ++ capitalize (drop 8 $ ts !! 1) ++ " c"
+            then capitalize (drop 8 $ ts !! 1) ++ " c"
             else (case lookup (head ts) varTable of 
                     Just s -> s; 
                     Nothing -> error $ "type " ++ s ++ "not found";)
@@ -156,11 +158,11 @@ entryCall (Fun (_, n) args)
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
         typeDeclaration = en ++ "\n  :: " 
                        ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FT.FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+                       ++ "FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
         input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
                 $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
-               ++ map (\o -> "F.malloc >>= $ \\" ++ snd o ++ "\n  -> ") outArgs 
+               ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs 
         call = "C.inContextWithError context (\\context'\n  -> Raw." ++ sn ++ " context' " 
             ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
         peek o = if isFO o then "U.peekFreeWrapIn context " else "U.peekFree "
@@ -215,57 +217,77 @@ main = do
           , ["ForeignFunctionInterface"]
           , [] 
           , [ N "Data.Int (Int8, Int16, Int32, Int64)"
-            , N "Data.Word (Word8, Word16, Word32 Word64)"
-            , N "Foreign.CTypes (CBool)"
-            , N "Foreign.Ptr (Ptr)" ]
+            , N "Data.Word (Word8, Word16, Word32, Word64)"
+            , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..))"
+            , N "Foreign.Ptr (Ptr)" ] ++ specific backend
           , rawImportString header )
         , ( Just "TypeClasses"
-          , ["FutharkObject", "FutharkArray", "Input", "Output"]
-          , ["MultiParamTypeClasses"]
-          , [Q "Raw" "Raw"]
-          , []
+          , [ "FutharkObject", "FutharkArray"
+            , "freeFO", "withFO", "wrapFO", "newFA", "shapeFA", "valuesFA"
+            , "Input", "Output"
+            , "fromFuthark", "toFuthark"]
+          , ["MultiParamTypeClasses", "FunctionalDependencies"]
+          , [Q "Raw" "Raw", N "FT"] 
+          , [N "Foreign", Q "Data.Massiv.Array" "M"]
           , typeClassesBody ) 
         , ( Just "Config"
           , []
           , []
           , [Q "Raw" "Raw"]
-          , []
+          , [ N "Foreign.C" ] ++ specific backend
           , configBody ) 
         , ( Just "Context"
           , []
           , []
-          , [Q "Raw" "Raw"]
-          , []
+          , [Q "Raw" "Raw", N "Config"]
+          , [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C" ]
           , contextBody )
         , ( Just "FT"
-          , ["runFTIn", "runFTWith", "runFT", "unsafeLiftFromIO"]
-          , ["RankNTypes"]
-          , [N "Context"]
+          , ["FT", "runFTIn", "runFTWith", "runFT", "unsafeLiftFromIO"]
+          , ["RankNTypes", "ExistentialQuantification"]
+          , [N "Context", N "Config"]
           , [N "System.IO.Unsafe"]
           , fTBody ) 
         , ( Just "Utils"
           , []
-          , ["RankNTypes"]
+          , [ "RankNTypes"
+            , "FlexibleInstances"
+            , "MultiParamTypeClasses"
+            , "UndecidableInstances"]
           , [Q "Raw" "Raw", N "Context", N "FT", N "TypeClasses"]
-          , [Q "Data.Massiv.Array" "M"]
+          , [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
+            , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU"]
           , utilsBody )
         , ( Just "Types"
           , []
-          , ["RankNTypes", "ExistentialQuantification"]
+          , ["RankNTypes", "ExistentialQuantification"
+            , "MultiParamTypeClasses", "TypeSynonymInstances", "FlexibleInstances"]
           , [Q "Raw" "Raw", N "Utils", N "TypeClasses"]
-          , []
+          , [ Q "Foreign" "F", Q "Data.Massiv.Array" "M"
+            , N "Data.Int (Int8, Int16, Int32, Int64)"
+            , N "Data.Word (Word8, Word16, Word32, Word64)"
+            , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..))"
+            , N "Foreign.Ptr (Ptr)" ]
           , instanceDeclarationString header )
         , ( Just "Entries"
           , []
           , []
-          , [Q "Raw" "Raw", Q "Context" "C", Q "FT" "FT", Q "Utils" "U", Q "Types" "T"]
-          , [Q "Foreign" "F"]
+          , [ Q "Raw" "Raw", Q "Context" "C", N "FT (FT)", Q "FT" "FT"
+            , Q "Utils" "U", N "Types", Q "TypeClasses" "T" ]
+            , [ N "Data.Int (Int8, Int16, Int32, Int64)"
+              , N "Data.Word (Word8, Word16, Word32, Word64)" 
+              , Q "Foreign" "F", N "Foreign.C.Types" ]
           , entryCallString header ) 
         , ( Nothing
-          , ["module Context", "module Config", "module TypeClasses", "module FT"]
+          , ["module F"]
           , []
-          , [N "Context", N "Config hiding (setOption)", N "TypeClasses hiding (FutharkObject, FutharkArray)", N "FT"]
+          , [ Q "Context" "F"
+            , Q "Config" "F hiding (setOption)"
+            , Q "TypeClasses" "F hiding (FutharkObject, FutharkArray)"
+            , Q "Utils" "F ()"
+            , Q "FT" "F"]
           , []
           , "" ) ]
     where refDir = "code"
-         
+          specific backend = case backend of
+             "opencl" -> [N "Control.Parallel.OpenCL (CLMem, CLCommandQueue)"]
