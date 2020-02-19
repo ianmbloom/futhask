@@ -38,7 +38,7 @@ is used. Additionally
 are defined for convienience in the case that the context doesn't need to be reused.
 
 ### Input and Output
-For conversion between Futhark values and Haskell values two classes are defined.
+For conversion between Futhark values and Haskell values, two classes are defined.
 
     class Input fo ho where
         toFuthark :: ho -> FT c fo 
