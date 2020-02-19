@@ -24,7 +24,7 @@ The generated code can be split in two main parts, raw and wrapped. The raw inte
 Available context options will depend on backend used.
 
 ### The FT monad
-To make the wrappers safe, and reduce clutter from explicitly passing around the context, the FT-monad is introduced. The FT-monad is an environment (Reader) monad that implicitly passes the context around as necessary. Like the ST-monad, the FT-monad is parameterised by a rigid type variable to prevent references to the context from escaping the monad.
+To make the wrappers safe, and reduce clutter from explicitly passing around the context, the FT monad is introduced. The FT monad is an environment (Reader) monad that implicitly passes the context around as necessary. Like the ST monad, the FT monad is parameterised by a rigid type variable to prevent references to the context from escaping the monad.
 
 To run the computation, the function
 
