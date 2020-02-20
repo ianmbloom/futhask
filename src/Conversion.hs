@@ -56,8 +56,8 @@ varTable =
     , ("uint64_t", "Word64")
     , ("size_t", "CSize")
     , ("cl_mem", "CLMem")
-    , ("cl_command_queue", "CLCommandQueue") ]
-
+    , ("cl_command_queue", "CLCommandQueue")
+    , ("CUdeviceptr", "DevicePtr ()") ]
 
 varTable2 = 
     [ ("f32", "Float")

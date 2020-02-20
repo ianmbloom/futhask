@@ -23,7 +23,7 @@ haskellHeader exports extensions localImports globalImports moduleName subModule
 
 specific C = []
 specific OpenCL = [N "Control.Parallel.OpenCL (CLMem, CLCommandQueue)"]
-specific Cuda = []
+specific Cuda = [N "Foreign.CUDA.Ptr(DevicePtr(..))"]
 
 rawHeader backend = haskellHeader
     []
