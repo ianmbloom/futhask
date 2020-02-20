@@ -94,9 +94,9 @@ entriesHeader backend = haskellHeader
 exportsHeader backend = haskellHeader
     [ "module F" ]
     []
-    [ Q "Context" "F"
-    , Q "Config" "F hiding (setOption)"
-    , Q "TypeClasses" "F hiding (FutharkObject, FutharkArray)"
-    , Q "Utils" "F ()"
-    , Q "FT" "F" ]
+    [ N "Context as F"
+    , N "Config as F hiding (setOption)"
+    , N "TypeClasses as F hiding (FutharkObject, FutharkArray)"
+    , N "Utils as F ()"
+    , N "FT as F" ]
     []
