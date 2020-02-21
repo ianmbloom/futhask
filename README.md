@@ -12,6 +12,8 @@ Futhask is a code generator that aims to create safe, Haskell friendly wrappers 
     futhark opencl --library myprogram.fut
     futhask opencl myprogram.h src MyLibrary
 
+For a simple example of how generated haskell code can be used, see [FuthaskExample](https://gitlab.com/Gusten_Isfeldt/futhaskexample)
+
 ### Import Code
     import [ModuleName]
     import [ModuleName].Entries
