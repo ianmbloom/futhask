@@ -183,37 +183,36 @@ instance Output CBool Bool where
 
 
 -- Ptr - Dim conversion
-peekAndFreeArray n a = peekArray n a >>= \a' -> free a >> return a'
 
 to1d f cP aP
        = f cP aP
        >>= fmap (\[d0] -> M.Sz1 d0)
        . fmap (fmap fromIntegral)
-       . peekAndFreeArray 1
+       . peekArray 1
 
 to2d f cP aP
        = f cP aP
        >>= fmap (\[d0, d1] -> M.Sz2 d0 d1)
        . fmap (fmap fromIntegral)
-       . peekAndFreeArray 2
+       . peekArray 2
 
 to3d f cP aP
        = f cP aP
        >>= fmap (\[d0, d1, d2] -> M.Sz3 d0 d1 d2)
        . fmap (fmap fromIntegral)
-       . peekAndFreeArray 3
+       . peekArray 3
 
 to4d f cP aP
        = f cP aP
        >>= fmap (\[d0, d1, d2, d3] -> M.Sz4 d0 d1 d2 d3)
        . fmap (fmap fromIntegral)
-       . peekAndFreeArray 4
+       . peekArray 4
 
 to5d f cP aP
        = f cP aP
        >>= fmap (\[d0, d1, d2, d3, d4] -> M.Sz5 d0 d1 d2 d3 d4)
        . fmap (fmap fromIntegral)
-       . peekAndFreeArray 5
+       . peekArray 5
 
 from1d f cP eP (M.Sz1 d0)             = f cP eP (fromIntegral d0)
 
@@ -252,7 +251,7 @@ instance (FutharkArray array rawArray dim element)
           pointer <- mallocForeignPtrArray $ M.totalElem shape
           withForeignPtr pointer $ valuesFA c aP
           return $ M.resize' shape
-                 $ MU.unsafeArrayFromForeignPtr0 M.Par pointer
+                 $ MU.unsafeArrayFromForeignPtr0 M.Seq pointer
                  $ M.Sz1 (M.totalElem shape)
 
 instance (Output a a', Output b b')
