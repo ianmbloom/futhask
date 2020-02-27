@@ -39,6 +39,7 @@ main = do
         , (Just "Context", contextHeader, contextBody)
         , (Just "Config", configHeader, configBody backend)
         , (Just "FT", fTHeader, fTBody)
+        , (Just "Wrap", wrapHeader, wrapBody)
         , (Just "Utils", utilsHeader, utilsBody)
         , (Nothing, exportsHeader, "") ]
 

@@ -22,10 +22,11 @@ class (FutharkObject array rawArray, Storable element, M.Index dim)
         valuesFA :: Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int 
 
 class Input fo ho where
-    toFuthark :: ho -> FT c fo 
+    toFuthark :: ho -> FT c (fo c)
 
 class Output fo ho where
-    fromFuthark :: fo -> FT c ho
+    fromFuthark :: fo c -> FT c ho
+
 |]
 
 configBody C = [r|
@@ -111,7 +112,7 @@ setOption config option = case option of
 |]
 
 contextBody = [r|
-data Context = Context (ForeignPtr Raw.Futhark_context)
+data Context = Context (MVar Int) (ForeignPtr Raw.Futhark_context)
 
 getContext :: [ContextOption] -> IO Context
 getContext options = do
@@ -119,9 +120,19 @@ getContext options = do
      mapM_ (setOption config) options
      context <- Raw.context_new config
      Raw.context_config_free config
-     fmap Context $ FC.newForeignPtr context (Raw.context_free context)
+     childCount <- S.newMVar 0
+     fmap (Context childCount)
+        $ FC.newForeignPtr context 
+        $ (forkIO $ freeContext childCount context)
+        >> return ()
 
-inContext (Context fp) = withForeignPtr fp
+freeContext childCount pointer 
+    = readMVar childCount >>= \n 
+    -> if n == 0 
+        then Raw.context_free pointer 
+        else yield >> freeContext childCount pointer
+
+inContext (Context _ fp) = withForeignPtr fp
 inContextWithError :: Context -> (Ptr Raw.Futhark_context -> IO Int) -> IO ()
 inContextWithError context f 
     = inContext context f >>= \code 
@@ -163,24 +174,16 @@ unsafeLiftFromIO a = FT (\c -> unsafePerformIO $ a c)
 |]
 
 
-utilsBody = [r|
-wrapIn context rawObject 
-    = fmap wrapFO
-    $ FC.newForeignPtr
-        rawObject 
-        (inContextWithError context $ \c -> freeFO c rawObject)
+wrapBody = [r|
+wrapIn context@(Context childCount pointer) rawObject 
+    =  S.modifyMVar_ childCount (return.(+1))
+    >> (fmap wrapFO $ FC.newForeignPtr rawObject freeCall)
+    where freeCall = (inContextWithError context $ \c -> freeFO c rawObject)
+                  >> S.modifyMVar_ childCount (return.(+(-1)))
 
 peekFree p = peek p >>= \v -> free p >> return v
 peekFreeWrapIn context rawP 
     = peek rawP >>= wrapIn context >>= \fo -> F.free rawP >> return fo
-
-
-instance Input CBool Bool where 
-    toFuthark b = return $ if b then fromInteger 1 else fromInteger 0
-
-instance Output CBool Bool where
-    fromFuthark cb = return $ if cb /= fromInteger 0 then True else False
-
 
 -- Ptr - Dim conversion
 
@@ -214,6 +217,7 @@ to5d f cP aP
        . fmap (fmap fromIntegral)
        . peekArray 5
 
+
 from1d f cP eP (M.Sz1 d0)             = f cP eP (fromIntegral d0)
 
 from2d f cP eP (M.Sz2 d0 d1)          = f cP eP (fromIntegral d0)
@@ -234,15 +238,19 @@ from5d f cP eP (M.Sz5 d0 d1 d2 d3 d4) = f cP eP (fromIntegral d0)
                                                 (fromIntegral d3)
                                                 (fromIntegral d4)
 
+|]
+
+utilsBody = [r|
+
 instance (FutharkArray array rawArray dim element)
-  => Input (array c) (M.Array M.S dim element) where
+  => Input array (M.Array M.S dim element) where
     toFuthark array = unsafeLiftFromIO $ \context
       -> inContext context $ \c
       -> MU.unsafeWithPtr array (\aP -> newFA c aP $ M.size array)
       >>= wrapIn context
 
 instance (FutharkArray array rawArray dim element)
-  => Output (array c) (M.Array M.S dim element) where
+  => Output array (M.Array M.S dim element) where
     fromFuthark array = unsafeLiftFromIO $ \context
       -> inContext context $ \c
       -> withFO array $ \aP
@@ -254,6 +262,100 @@ instance (FutharkArray array rawArray dim element)
                  $ MU.unsafeArrayFromForeignPtr0 M.Seq pointer
                  $ M.Sz1 (M.totalElem shape)
 
+fromFutharkT2 (a, b) = do
+    a' <- fromFuthark a
+    b' <- fromFuthark b
+    return (a', b')
+
+fromFutharkT3 (a, b, c) = do
+    a' <- fromFuthark a
+    b' <- fromFuthark b
+    c' <- fromFuthark c
+    return (a', b', c')
+
+fromFutharkT4 (a, b, c, d) = do
+    a' <- fromFuthark a
+    b' <- fromFuthark b
+    c' <- fromFuthark c
+    d' <- fromFuthark d
+    return (a', b', c', d')
+
+fromFutharkT5 (a, b, c, d, e) = do
+    a' <- fromFuthark a
+    b' <- fromFuthark b
+    c' <- fromFuthark c
+    d' <- fromFuthark d
+    e' <- fromFuthark e
+    return (a', b', c', d', e')
+
+fromFutharkT6 (a, b, c, d, e, f) = do
+    a' <- fromFuthark a
+    b' <- fromFuthark b
+    c' <- fromFuthark c
+    d' <- fromFuthark d
+    e' <- fromFuthark e
+    f' <- fromFuthark f
+    return (a', b', c', d', e', f')
+
+fromFutharkT7 (a, b, c, d, e, f, g) = do
+    a' <- fromFuthark a
+    b' <- fromFuthark b
+    c' <- fromFuthark c
+    d' <- fromFuthark d
+    e' <- fromFuthark e
+    f' <- fromFuthark f
+    g' <- fromFuthark g
+    return (a', b', c', d', e', f', g')
+
+
+toFutharkT2 (a, b) = do
+    a' <- toFuthark a
+    b' <- toFuthark b
+    return (a', b')
+
+toFutharkT3 (a, b, c) = do
+    a' <- toFuthark a
+    b' <- toFuthark b
+    c' <- toFuthark c
+    return (a', b', c')
+
+toFutharkT4 (a, b, c, d) = do
+    a' <- toFuthark a
+    b' <- toFuthark b
+    c' <- toFuthark c
+    d' <- toFuthark d
+    return (a', b', c', d')
+
+toFutharkT5 (a, b, c, d, e) = do
+    a' <- toFuthark a
+    b' <- toFuthark b
+    c' <- toFuthark c
+    d' <- toFuthark d
+    e' <- toFuthark e
+    return (a', b', c', d', e')
+
+toFutharkT6 (a, b, c, d, e, f) = do
+    a' <- toFuthark a
+    b' <- toFuthark b
+    c' <- toFuthark c
+    d' <- toFuthark d
+    e' <- toFuthark e
+    f' <- toFuthark f
+    return (a', b', c', d', e', f')
+
+toFutharkT7 (a, b, c, d, e, f, g) = do
+    a' <- toFuthark a
+    b' <- toFuthark b
+    c' <- toFuthark c
+    d' <- toFuthark d
+    e' <- toFuthark e
+    f' <- toFuthark f
+    g' <- toFuthark g
+    return (a', b', c', d', e', f', g')
+
+|]
+
+{--
 instance (Output a a', Output b b')
   => Output (a, b) (a', b') where
     fromFuthark (a, b) = do
@@ -322,6 +424,6 @@ instance (Input a a', Input b b', Input c c', Input d d', Input e e')
         d' <- toFuthark d
         e' <- toFuthark e
         return (a', b', c', d', e')
+--}
 
-|]
 

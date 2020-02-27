@@ -58,9 +58,9 @@ are defined for convienience for cases where the context doesn't need to be reus
 For conversion between Futhark values and Haskell values, two classes are defined.
 
     class Input fo ho where
-        toFuthark :: ho -> FT c fo 
+        toFuthark :: ho -> FT c (fo c) 
 
     class Output fo ho where
-        fromFuthark :: fo -> FT c ho
+        fromFuthark :: fo c -> FT c ho
 
-Instances of Input and Output are generated for all transparent Futhark-arrays. The Haskell representation is `Array S` from `Data.Massiv.Array`. Instances are also defined for tuples of instances. The absence of functional dependencies in the definitions might require more explicit type signatures, but gives more flexibility to define new instances.
+Instances of Input and Output are generated for all transparent Futhark-arrays. The Haskell representation is `Array S` from `Data.Massiv.Array`. The absence of functional dependencies in the definitions might require more explicit type signatures, but gives more flexibility to define new instances. For tuples of instances, functions on the form `fromFutharkTN`, where `N` is the tuple size, are defined.

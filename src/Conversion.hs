@@ -126,6 +126,7 @@ instanceDeclarations (Var (_, n))
                       ++ "  wrapFO = " ++ cn ++ "\n"
                       ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
                       ++ "  withFO (" ++ cn ++ " fp) = F.withForeignPtr fp\n"
+          nfdataString = "instance NFData (" ++ cn ++" c) where rnf = rwhnf"
 
 instanceDeclarations _ = ""
 
