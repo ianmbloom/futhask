@@ -17,6 +17,7 @@ isWhiteSpace = (flip elem) " \t\n"
 isNameChar = not.(flip elem) " \t\n;,()"
 readPreproc = fmap Preproc $ (char '#') >> manyTill get (char '\n')
 readComment = fmap Comment $ (string "/*") >> manyTill get (string "*/")
+readOnelineComment = fmap Comment $ (string "//") >> manyTill get (char '\n')
 readTypeName = skipSpaces
             >> sepBy (munch1 (isNameChar)) (skipMany1 $ satisfy isWhiteSpace) >>= \ws 
             -> case ws of
@@ -33,7 +34,7 @@ readFun = readTypeName >>= \tn
        >> return (Fun tn args)
 
 
-readHeaderItem = skipSpaces >> readPreproc <++ readComment <++ readFun <++ readVar
+readHeaderItem = skipSpaces >> readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
 readHeader fn = fmap (fst . head 
             . (readP_to_S $ many readHeaderItem >>= \his 
                          -> skipSpaces >> eof >> return his)) 
@@ -82,7 +83,7 @@ haskellType s =
             then capitalize $ ts !! 1
             else (case lookup (head ts) varTable of 
                     Just s -> s; 
-                    Nothing -> error $ "type " ++ s ++ "not found";))
+                    Nothing -> error $ "type \'" ++ s ++ "\' not found";))
      ++ replicate (pn-1) ')'
 
 haskellDeclaration (Preproc s) = ""
