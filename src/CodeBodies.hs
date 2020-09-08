@@ -139,12 +139,14 @@ inContextWithError context f = do
     if code == 0 
         then success
         else do
+            clearError
             performGC
             code' <- attempt
             if code' == 0
                 then success
                 else failure
-    where 
+    where
+        clearError = inContext context Raw.context_get_error >>= F.free
         attempt = inContext context f
         success = inContext context Raw.context_sync >> return ()
         failure = inContext context Raw.context_get_error  >>= \cs 
