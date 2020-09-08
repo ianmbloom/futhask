@@ -89,7 +89,7 @@ haskellType s =
 haskellDeclaration (Preproc s) = ""
 haskellDeclaration (Comment s) 
     = intercalate "\n" 
-    $ map (("--"++).drop 2) $ filter (/="") $ lines s 
+    $ map (("--"++).dropWhile (==' ')) $ filter (/="") $ lines s 
 haskellDeclaration (Var (_, n)) = "data " ++ capitalize n
 haskellDeclaration (Fun (ot, name) args) 
     =  "foreign import ccall unsafe \"" ++ name ++ "\"\n  "
