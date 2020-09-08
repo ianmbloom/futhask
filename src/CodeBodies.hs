@@ -116,12 +116,12 @@ data Context = Context (MVar Int) (ForeignPtr Raw.Futhark_context)
 
 getContext :: [ContextOption] -> IO Context
 getContext options = do
-     config <- Raw.context_config_new
-     mapM_ (setOption config) options
-     context <- Raw.context_new config
-     Raw.context_config_free config
-     childCount <- S.newMVar 0
-     fmap (Context childCount)
+    config <- Raw.context_config_new
+    mapM_ (setOption config) options
+    context <- Raw.context_new config
+    Raw.context_config_free config
+    childCount <- S.newMVar 0
+    fmap (Context childCount)
         $ FC.newForeignPtr context 
         $ (forkIO $ freeContext childCount context)
         >> return ()
@@ -133,24 +133,44 @@ freeContext childCount pointer
         else yield >> freeContext childCount pointer
 
 inContext (Context _ fp) = withForeignPtr fp
+
+getError context = do
+    cs <- inContext context Raw.context_get_error
+    s <- peekCString cs
+    F.free cs
+    error s
+
+clearError context = inContext context Raw.context_get_error >>= F.free
+
+clearCache context
+    = inContext context Raw.context_clear_caches >>= \code 
+    -> if code == 0 
+        then return ()
+        else getError context
+
+syncContext context 
+    = inContext context Raw.context_sync >>= \code 
+    -> if code == 0 
+        then return ()
+        else getError context
+
 inContextWithError :: Context -> (Ptr Raw.Futhark_context -> IO Int) -> IO ()
 inContextWithError context f = do
     code <- attempt
     if code == 0 
         then success
         else do
-            clearError
+            clearError context
             performGC
             code' <- attempt
             if code' == 0
                 then success
                 else failure
     where
-        clearError = inContext context Raw.context_get_error >>= F.free
         attempt = inContext context f
-        success = inContext context Raw.context_sync >> return ()
-        failure = inContext context Raw.context_get_error  >>= \cs 
-               -> peekCString cs >>= \s -> F.free cs >> error s
+        success = return ()
+        failure = getError context
+
 |]
 
 
@@ -264,6 +284,7 @@ instance (FutharkArray array rawArray dim element)
       -> inContext context $ \c
       -> withFO array $ \aP
       -> do
+          syncContext context
           shape <- shapeFA c aP
           pointer <- mallocForeignPtrArray $ M.totalElem shape
           withForeignPtr pointer $ valuesFA c aP
