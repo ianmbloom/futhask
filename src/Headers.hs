@@ -53,7 +53,7 @@ contextHeader backend = haskellHeader
     []
     []
     [Q "Raw" "Raw", N "Config" ]
-    [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", Q "Control.Concurrent.MVar.Strict" "S"]
+    [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", Q "Control.Concurrent.MVar.Strict" "S", N "System.Mem (performGC)"]
 
 fTHeader backend = haskellHeader
     [ "FT", "runFTIn", "runFTWith", "runFT", "unsafeLiftFromIO" ]

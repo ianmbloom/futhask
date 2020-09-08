@@ -134,14 +134,21 @@ freeContext childCount pointer
 
 inContext (Context _ fp) = withForeignPtr fp
 inContextWithError :: Context -> (Ptr Raw.Futhark_context -> IO Int) -> IO ()
-inContextWithError context f 
-    = inContext context f >>= \code 
-    -> if code == 0 
-            then inContext context Raw.context_sync 
---              >> inContext context Raw.context_clear_caches --OpenCL specific
-              >> return ()  
-            else inContext context Raw.context_get_error 
-             >>= \cs -> peekCString cs >>= \s -> F.free cs >> error s
+inContextWithError context f = do
+    code <- attempt
+    if code == 0 
+        then success
+        else do
+            performGC
+            code' <- attempt
+            if code' == 0
+                then success
+                else failure
+    where 
+        attempt = inContext context f
+        success = inContext context Raw.context_sync >> return ()
+        failure = inContext context Raw.context_get_error  >>= \cs 
+               -> peekCString cs >>= \s -> F.free cs >> error s
 |]
 
 
