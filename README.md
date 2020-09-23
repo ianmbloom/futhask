@@ -49,7 +49,7 @@ To run computations, the function
 
 is used. Additionally
 
-    runFTWith :: [ContextOptions] -> (forall c. FT c a) -> a
+    runFTWith :: [ContextOption] -> (forall c. FT c a) -> a
     runFT :: (forall c. FT c a) -> a
 
 are defined for convienience for cases where the context doesn't need to be reused.
