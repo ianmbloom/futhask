@@ -36,7 +36,7 @@ The codes generated for OpenCL and CUDA, both refer to types from the `OpenCL` a
 The generated code can be split in two main parts, raw and wrapped. The raw interface is simply the C-functions wrapped in the IO-monad, providing no added safety and requiring manual memory management. The wrapped interface uses `newForeignPtr` to introduce all Futhark pointers to the GC, and provides function types closer to those used within Futhark, returning tuples instead of writing to pointers.
 
 ### Context Generation
-    getContext :: [ContextOptions] -> IO Context
+    getContext :: [ContextOption] -> IO Context
 
 Available context options will depend on backend used.
 
