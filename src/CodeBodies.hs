@@ -9,9 +9,13 @@ typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
     wrapFO :: ForeignPtr raw -> wrapped c
     freeFO :: Ptr Raw.Futhark_context -> Ptr raw -> IO Int
-    withFO :: wrapped c -> (Ptr raw -> IO b) -> IO b
+    fromFO :: wrapped c -> ForeignPtr raw
     
 
+withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
+withFO = withForeignPtr . fromFO
+finalizeFO :: FutharkObject wrapped raw => wrapped -> IO ()
+finalizeFO = finalizeForeignPtr . fromFO
 
 class (FutharkObject array rawArray, Storable element, M.Index dim) 
     => FutharkArray array rawArray dim element 
@@ -175,31 +179,56 @@ inContextWithError context f = do
 
 
 fTBody = [r|
-newtype FT c a = FT (Context -> a)
+instance MonadTrans (FTT c) where
+    lift a = FTT (\_ -> a)
 
-instance Functor (FT c) where
-    fmap f (FT a) = FT (f.a)
+instance Functor m => Functor (FTT c m) where
+    fmap f (FTT a) = FTT (fmap f.a)
 
-instance Applicative (FT c) where
-    pure a = FT (\_ -> a)
-    (<*>) (FT a) (FT b) = FT (\c -> a c $ b c)
+instance Applicative m => Applicative (FTT c m) where
+    pure a = FTT (\_ -> pure a)
+    (<*>) (FTT a) (FTT b) = FTT (\c -> a c <*> b c)
 
-instance Monad (FT c) where
-    return = pure 
-    (>>=) (FT a) f = FT (\c -> (\(FT b) -> b c) $ f $ a c)
+instance Monad m => Monad (FTT c m) where
+    (>>=) (FTT a) f = FTT (\c -> a c >>= (\(FTT b) -> b c) . f)
+
+type FT c = FTT c Identity
+type FTIO c = FTT c IO
+
+mapFTT :: (m a -> n b) -> FTT c m a -> FTT c n b
+mapFTT f (FTT a) = FTT (f.a)
+map2FTT :: (m a -> n b -> k c) -> FTT c' m a -> FTT c' n b -> FTT c' k c
+map2FTT f (FTT a) (FTT b) = FTT (\c -> f (a c) (b c))
+
+
+runFTTIn :: Context -> (forall c. FTT c m a) -> m a
+runFTTIn context (FTT a) = a context
+
+runFTTWith :: [ContextOption] -> (forall c. FTT c m a) -> m a
+runFTTWith options a
+    = unsafePerformIO
+    $ getContext options >>= \c -> return $ runFTTIn c a
+runFTT = runFTTWith []
 
 runFTIn :: Context -> (forall c. FT c a) -> a
-runFTIn context (FT a) = a context
-
+runFTIn context a = runIdentity $ runFTTIn context $ a
 
 runFTWith :: [ContextOption] -> (forall c. FT c a) -> a
-runFTWith options a 
-    = unsafePerformIO 
-    $ getContext options >>= \c -> return $ runFTIn c a 
+runFTWith options a = runIdentity $ runFTTWith options a
 runFT = runFTWith []
 
+pureFT :: (Monad m) => FT c a -> FTT c m a
+pureFT (FTT a) = FTT (pure . runIdentity . a)
+
+unsafeFromFTIO :: FTIO c a -> FT c a
+unsafeFromFTIO (FTT a) = FTT (Identity . unsafePerformIO . a)
+
+wrapIO :: (Context -> IO a) -> FTIO c a
+wrapIO = FTT
+
 unsafeLiftFromIO :: (Context -> IO a) -> FT c a
-unsafeLiftFromIO a = FT (\c -> unsafePerformIO $ a c)
+unsafeLiftFromIO = unsafeFromFTIO . wrapIO
+
 |]
 
 

@@ -56,10 +56,12 @@ contextHeader backend = haskellHeader
     [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", Q "Control.Concurrent.MVar.Strict" "S", N "System.Mem (performGC)"]
 
 fTHeader backend = haskellHeader
-    [ "FT", "runFTIn", "runFTWith", "runFT", "unsafeLiftFromIO" ]
+    [ "FTT", "FT", "FTIO"
+    , "runFTIn", "runFTWith", "runFT", "runFTTIn", "runFTTWith", "runFTT"
+    , "mapFTT", "map2FTT", "pureFT", "wrapIO", "unsafeFromFTIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification" ]
     [ N "Context", N "Config" ]
-    [ N "System.IO.Unsafe" ]
+    [ N "System.IO.Unsafe", N "Control.Monad.Trans", N "Control.Monad.Identity" ]
 
 wrapHeader backend = haskellHeader
     []
@@ -97,6 +99,7 @@ entriesHeader backend = haskellHeader
 utilsHeader backend =haskellHeader
     []
     [ "RankNTypes"
+    , "FlexibleContexts"
     , "FlexibleInstances"
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]

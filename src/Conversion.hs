@@ -126,7 +126,7 @@ instanceDeclarations (Var (_, n))
                       ++ "instance FutharkObject " ++ cn ++ " Raw." ++ rn ++ " where\n"
                       ++ "  wrapFO = " ++ cn ++ "\n"
                       ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
-                      ++ "  withFO (" ++ cn ++ " fp) = F.withForeignPtr fp\n"
+                      ++ "  fromFO (" ++ cn ++ " fp) = fp\n"
           nfdataString = "instance NFData (" ++ cn ++" c) where rnf = rwhnf"
 
 instanceDeclarations _ = ""
