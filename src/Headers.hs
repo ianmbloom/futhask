@@ -36,12 +36,13 @@ rawHeader backend = haskellHeader
 
 typeClassesHeader backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
-    , "freeFO", "withFO", "wrapFO", "newFA", "shapeFA", "valuesFA"
+    , "freeFO", "fromFO", "withFO", "wrapFO", "finalizeFO"
+    , "newFA", "shapeFA", "valuesFA"
     , "Input", "Output"
     , "fromFuthark", "toFuthark" ]
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
     [ Q "Raw" "Raw", N "FT" ] 
-    [ N "Foreign", Q "Data.Massiv.Array" "M" ]
+    [ N "Foreign", Q "Data.Massiv.Array" "M", N "Control.Monad.Trans" ]
 
 configHeader backend = haskellHeader
     []
@@ -86,14 +87,21 @@ typesHeader backend = haskellHeader
     , N "Foreign.Ptr (Ptr)"
     , N "Control.DeepSeq (rwhnf)" ]
 
-entriesHeader backend = haskellHeader
+entriesIOHeader backend = haskellHeader 
     []
     []
-    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FT)", Q "FT" "FT"
+    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FTIO)", Q "FT" "FT"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)" 
     , Q "Foreign" "F", N "Foreign.C.Types" ]
+
+entriesHeader backend = haskellHeader
+    []
+    []
+    [ N "FT (FT)", Q "FT" "FT", Q "EntriesIO" "IO"
+    , N "Types", Q "TypeClasses" "T" ]
+    []
 
 
 utilsHeader backend =haskellHeader

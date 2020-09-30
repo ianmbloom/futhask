@@ -14,8 +14,9 @@ class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
 
 withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
 withFO = withForeignPtr . fromFO
-finalizeFO :: FutharkObject wrapped raw => wrapped -> IO ()
-finalizeFO = finalizeForeignPtr . fromFO
+finalizeFO :: FutharkObject wrapped raw => wrapped c -> FTIO c ()
+finalizeFO = lift . finalizeForeignPtr . fromFO
+
 
 class (FutharkObject array rawArray, Storable element, M.Index dim) 
     => FutharkArray array rawArray dim element 
@@ -179,6 +180,9 @@ inContextWithError context f = do
 
 
 fTBody = [r|
+
+newtype FTT c m a = FTT (Context -> m a)
+
 instance MonadTrans (FTT c) where
     lift a = FTT (\_ -> a)
 
