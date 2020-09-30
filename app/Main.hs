@@ -34,7 +34,6 @@ main = do
     mapM_ (writeModule backend srcDir moduleName)
         [ (Just "Raw", rawHeader, rawImportString header)
         , (Just "Entries", entriesHeader, entryCallString header)
-        , (Just "EntriesIO", entriesIOHeader, entryCallIOString header)
         , (Just "Types", typesHeader, instanceDeclarationString header)
         , (Just "TypeClasses", typeClassesHeader, typeClassesBody)
         , (Just "Context", contextHeader, contextBody)

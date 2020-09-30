@@ -27,10 +27,10 @@ class (FutharkObject array rawArray, Storable element, M.Index dim)
         valuesFA :: Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int 
 
 class Input fo ho where
-    toFuthark :: ho -> FT c (fo c)
+    toFuthark :: Monad m => ho -> FTT c m (fo c)
 
 class Output fo ho where
-    fromFuthark :: fo c -> FT c ho
+    fromFuthark :: Monad m => fo c -> FTT c m ho
 
 |]
 
@@ -227,11 +227,8 @@ pureFT (FTT a) = FTT (pure . runIdentity . a)
 unsafeFromFTIO :: FTIO c a -> FT c a
 unsafeFromFTIO (FTT a) = FTT (Identity . unsafePerformIO . a)
 
-wrapIO :: (Context -> IO a) -> FTIO c a
-wrapIO = FTT
-
-unsafeLiftFromIO :: (Context -> IO a) -> FT c a
-unsafeLiftFromIO = unsafeFromFTIO . wrapIO
+unsafeLiftFromIO :: Monad m => (Context -> IO a) -> FTT c m a
+unsafeLiftFromIO a = FTT (pure . unsafePerformIO . a)
 
 |]
 

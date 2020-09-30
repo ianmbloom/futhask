@@ -59,7 +59,7 @@ contextHeader backend = haskellHeader
 fTHeader backend = haskellHeader
     [ "FTT", "FT", "FTIO"
     , "runFTIn", "runFTWith", "runFT", "runFTTIn", "runFTTWith", "runFTT"
-    , "mapFTT", "map2FTT", "pureFT", "wrapIO", "unsafeFromFTIO", "unsafeLiftFromIO" ]
+    , "mapFTT", "map2FTT", "pureFT", "unsafeFromFTIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification" ]
     [ N "Context", N "Config" ]
     [ N "System.IO.Unsafe", N "Control.Monad.Trans", N "Control.Monad.Identity" ]
@@ -87,24 +87,16 @@ typesHeader backend = haskellHeader
     , N "Foreign.Ptr (Ptr)"
     , N "Control.DeepSeq (rwhnf)" ]
 
-entriesIOHeader backend = haskellHeader 
+entriesHeader backend = haskellHeader 
     []
     []
-    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FTIO)", Q "FT" "FT"
+    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FTT)", Q "FT" "FT"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)" 
     , Q "Foreign" "F", N "Foreign.C.Types" ]
 
-entriesHeader backend = haskellHeader
-    []
-    []
-    [ N "FT (FT)", Q "FT" "FT", Q "EntriesIO" "IO"
-    , N "Types", Q "TypeClasses" "T" ]
-    []
-
-
-utilsHeader backend =haskellHeader
+utilsHeader backend = haskellHeader
     []
     [ "RankNTypes"
     , "FlexibleContexts"

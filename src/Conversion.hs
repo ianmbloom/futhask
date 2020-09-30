@@ -142,20 +142,8 @@ haskellType' s =
                     Just s -> s; 
                     Nothing -> error $ "type " ++ s ++ "not found";)
 
+
 entryCall (Fun (_, n) args) 
-    = if isEntry 
-        then en ++ " " ++ argString 
-          ++ " = FT.unsafeFromFTIO $ IO." ++ en ++ " " ++ argString ++ "\n"
-        else ""
-    where
-        sn = drop 8 n
-        isEntry = take 5 sn == "entry"
-        en = drop 6 sn
-        argString = unwords $ filter ((=="in").take 2) $ map snd $ tail args
-
-entryCall _ = ""
-
-entryCallIO (Fun (_, n) args) 
     = if isEntry 
         then "\n" ++ typeDeclaration ++ input ++ preCall ++ call ++ postCall
         else ""
@@ -166,10 +154,10 @@ entryCallIO (Fun (_, n) args)
         isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable 
                     of Just _ -> False; Nothing -> True; 
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
-        typeDeclaration = en ++ "\n  :: " 
+        typeDeclaration = en ++ "\n  :: Monad m \n  => " 
                        ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FTIO c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
-        input = unwords (en : map snd inArgs) ++ "\n  =  FT.wrapIO $ \\context\n  -> "
+                       ++ "FTT c m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+        input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
                 $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
                ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs 
@@ -182,7 +170,6 @@ entryCallIO (Fun (_, n) args)
                         else peek (head outArgs) ++ snd (head outArgs))
                 ++ "\n"
 
-entryCallIO _ = ""
+entryCall _ = ""
         
 entryCallString headerItems = concatMap entryCall headerItems
-entryCallIOString headerItems = concatMap entryCallIO headerItems
