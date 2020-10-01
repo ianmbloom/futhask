@@ -87,7 +87,7 @@ For conversion between Futhark values and Haskell values, two classes are define
 Instances of Input and Output are generated for all transparent Futhark-arrays. The Haskell representation is `Array S` from `Data.Massiv.Array`. The absence of functional dependencies in the definitions might require more explicit type signatures, but gives more flexibility to define new instances. For tuples of instances, functions on the form `fromFutharkTN`, where `N` is the tuple size, are defined.
 
 ### Memory management
-All of the wrapped values are have finalizers, and should *eventually* be garbage collected. However, GHCs GC does not know how much memory the context is using, and so collection will not always be triggered frequently enough. This is primarily an issue when the program iterates on futhark values, without any haskell-side allocations.
+All of the wrapped values have finalizers, and should *eventually* be garbage collected. However, GHCs GC does not know how much memory the context is using, and so collection will not always be triggered frequently enough. This is primarily an issue when the program iterates on futhark values, without any haskell-side allocations.
 
 One way to deal with this is to manually manage the memory using
 
