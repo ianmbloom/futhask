@@ -33,7 +33,7 @@ If using `stack` add `c-sources: [Futhark.c]` to the `library` section of `packa
 The codes generated for OpenCL and CUDA, both refer to types from the `OpenCL` and `cuda` packages respectively. This is only relevant if one wants to use certain functions in the raw interface, but, without modification, the generated code will not compile without these dependencies.
 
 ## Generated Code
-The generated code can be split in two main parts, raw and wrapped. The raw interface is simply the C-functions wrapped in the IO-monad, providing no added safety and requiring manual memory management. The wrapped interface uses `newForeignPtr` to introduce all Futhark pointers to the GC, and provides function types closer to those used within Futhark, returning tuples instead of writing to pointers.
+The generated code can be split in two main parts, raw and wrapped. The raw interface is simply the C-functions wrapped in the `IO`-monad, providing no added safety and requiring manual memory management. The wrapped interface uses `newForeignPtr` to introduce all Futhark pointers to the GC, and provides function types closer to those used within Futhark, returning tuples instead of writing to pointers.
 
 ### Context Generation
     getContext :: [ContextOption] -> IO Context
