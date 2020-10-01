@@ -93,6 +93,6 @@ One way to deal with this is to manually manage the memory using
 
     finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FTT c m ()
 
-As with any manual memory management, the programmer is responisible for ensuring that the finalized value will not be used afterwards.
+As with any manual memory management, the programmer is responsible for ensuring that the finalized value will not be used afterwards.
 
 
