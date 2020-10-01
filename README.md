@@ -29,7 +29,7 @@ If using `stack` add `c-sources: [Futhark.c]` to the `library` section of `packa
     extra-libraries: cuda cudart nvrtc
 
 ### Dependencies
-`massiv` is required for all backends.
+`transformers` and `massiv` are required for all backends.
 The codes generated for OpenCL and CUDA, both refer to types from the `OpenCL` and `cuda` packages respectively. This is only relevant if one wants to use certain functions in the raw interface, but, without modification, the generated code will not compile without these dependencies.
 
 ## Generated Code
