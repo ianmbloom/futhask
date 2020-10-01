@@ -14,8 +14,8 @@ class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
 
 withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
 withFO = withForeignPtr . fromFO
-finalizeFO :: FutharkObject wrapped raw => wrapped c -> FTIO c ()
-finalizeFO = lift . finalizeForeignPtr . fromFO
+finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FTT c m ()
+finalizeFO = lift . liftIO . finalizeForeignPtr . fromFO
 
 
 class (FutharkObject array rawArray, Storable element, M.Index dim) 

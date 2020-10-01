@@ -42,7 +42,8 @@ typeClassesHeader backend = haskellHeader
     , "fromFuthark", "toFuthark" ]
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
     [ Q "Raw" "Raw", N "FT" ] 
-    [ N "Foreign", Q "Data.Massiv.Array" "M", N "Control.Monad.Trans" ]
+    [ N "Foreign", Q "Data.Massiv.Array" "M"
+    , N "Control.Monad.Trans", N "Control.Monad.IO.Class" ]
 
 configHeader backend = haskellHeader
     []

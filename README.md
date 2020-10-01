@@ -54,13 +54,45 @@ is used. Additionally
 
 are defined for convienience for cases where the context doesn't need to be reused.
 
+### The FTT transformer
+For more flexibility, the FTT monad transformer can be used. For convenience the type synonyms
+
+    type FT c = FTT c Identity
+    type FTIO c = FTT c IO
+
+are defined, but entry-points are in the general `Monad m => FTT c m`.
+
+To run the transformer 
+    
+    runFTTIn :: Context -> (forall c. FTT c m a) -> m a
+    runFTTWith :: [ContextOption] -> (forall c. FTT c m a) -> m a
+    runFTT :: (forall c. FTT c m a) -> m a
+
+For lifting
+
+    mapFTT :: (m a -> n b) -> FTT c m a -> FTT c n b
+    map2FTT :: (m a -> n b -> k c) -> FTT c' m a -> FTT c' n b -> FTT c' k c
+    pureFT :: Monad m => FT c a -> FTT c m a
+    unsafeFromFTIO :: FTIO c a -> FT c a
+
 ### Input and Output
 For conversion between Futhark values and Haskell values, two classes are defined.
 
     class Input fo ho where
-        toFuthark :: ho -> FT c (fo c) 
+        toFuthark :: Monad m => ho -> FTT c m (fo c) 
 
     class Output fo ho where
-        fromFuthark :: fo c -> FT c ho
+        fromFuthark :: Monad m => fo c -> FTT c m ho
 
 Instances of Input and Output are generated for all transparent Futhark-arrays. The Haskell representation is `Array S` from `Data.Massiv.Array`. The absence of functional dependencies in the definitions might require more explicit type signatures, but gives more flexibility to define new instances. For tuples of instances, functions on the form `fromFutharkTN`, where `N` is the tuple size, are defined.
+
+### Memory management
+All of the wrapped values are have finalizers, and should *eventually* be garbage collected. However, GHCs GC does not know how much memory the context is using, and so collection will not always be triggered frequently enough. This is primarily an issue when the program iterates on futhark values, without any haskell-side allocations.
+
+One way to deal with this is to manually manage the memory using
+
+    finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FTT c m ()
+
+As with any manual memory management, the programmer is responisible for ensuring that the finalized value will not be used afterwards.
+
+
