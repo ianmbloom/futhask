@@ -126,7 +126,7 @@ instanceDeclarations (Var (_, n))
                       ++ "instance FutharkObject " ++ cn ++ " Raw." ++ rn ++ " where\n"
                       ++ "  wrapFO = " ++ cn ++ "\n"
                       ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
-                      ++ "  withFO (" ++ cn ++ " fp) = F.withForeignPtr fp\n"
+                      ++ "  fromFO (" ++ cn ++ " fp) = fp\n"
           nfdataString = "instance NFData (" ++ cn ++" c) where rnf = rwhnf"
 
 instanceDeclarations _ = ""
@@ -142,6 +142,7 @@ haskellType' s =
                     Just s -> s; 
                     Nothing -> error $ "type " ++ s ++ "not found";)
 
+
 entryCall (Fun (_, n) args) 
     = if isEntry 
         then "\n" ++ typeDeclaration ++ input ++ preCall ++ call ++ postCall
@@ -153,9 +154,9 @@ entryCall (Fun (_, n) args)
         isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable 
                     of Just _ -> False; Nothing -> True; 
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
-        typeDeclaration = en ++ "\n  :: " 
+        typeDeclaration = en ++ "\n  :: Monad m \n  => " 
                        ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FT c " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+                       ++ "FTT c m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
         input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
                 $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)

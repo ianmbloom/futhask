@@ -36,12 +36,14 @@ rawHeader backend = haskellHeader
 
 typeClassesHeader backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
-    , "freeFO", "withFO", "wrapFO", "newFA", "shapeFA", "valuesFA"
+    , "freeFO", "fromFO", "withFO", "wrapFO", "finalizeFO"
+    , "newFA", "shapeFA", "valuesFA"
     , "Input", "Output"
     , "fromFuthark", "toFuthark" ]
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
     [ Q "Raw" "Raw", N "FT" ] 
-    [ N "Foreign", Q "Data.Massiv.Array" "M" ]
+    [ N "Foreign", Q "Data.Massiv.Array" "M"
+    , N "Control.Monad.Trans", N "Control.Monad.IO.Class" ]
 
 configHeader backend = haskellHeader
     []
@@ -56,10 +58,12 @@ contextHeader backend = haskellHeader
     [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", Q "Control.Concurrent.MVar.Strict" "S", N "System.Mem (performGC)"]
 
 fTHeader backend = haskellHeader
-    [ "FT", "runFTIn", "runFTWith", "runFT", "unsafeLiftFromIO" ]
+    [ "FTT", "FT", "FTIO"
+    , "runFTIn", "runFTWith", "runFT", "runFTTIn", "runFTTWith", "runFTT"
+    , "mapFTT", "map2FTT", "pureFT", "unsafeFromFTIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification" ]
     [ N "Context", N "Config" ]
-    [ N "System.IO.Unsafe" ]
+    [ N "System.IO.Unsafe", N "Control.Monad.Trans", N "Control.Monad.Identity" ]
 
 wrapHeader backend = haskellHeader
     []
@@ -84,19 +88,19 @@ typesHeader backend = haskellHeader
     , N "Foreign.Ptr (Ptr)"
     , N "Control.DeepSeq (rwhnf)" ]
 
-entriesHeader backend = haskellHeader
+entriesHeader backend = haskellHeader 
     []
     []
-    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FT)", Q "FT" "FT"
+    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FTT)", Q "FT" "FT"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)" 
     , Q "Foreign" "F", N "Foreign.C.Types" ]
 
-
-utilsHeader backend =haskellHeader
+utilsHeader backend = haskellHeader
     []
     [ "RankNTypes"
+    , "FlexibleContexts"
     , "FlexibleInstances"
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]
