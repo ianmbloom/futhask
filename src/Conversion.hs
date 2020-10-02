@@ -156,8 +156,8 @@ entryCall (Fun (_, n) args)
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
         typeDeclaration = en ++ "\n  :: Monad m \n  => " 
                        ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FTT c m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
-        input = unwords (en : map snd inArgs) ++ "\n  =  FT.unsafeLiftFromIO $ \\context\n  -> "
+                       ++ "FutT c m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+        input = unwords (en : map snd inArgs) ++ "\n  =  Fut.unsafeLiftFromIO $ \\context\n  -> "
         preCall = concat 
                 $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
                ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs 

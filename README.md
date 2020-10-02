@@ -40,49 +40,49 @@ The generated code can be split in two main parts, raw and wrapped. The raw inte
 
 Available context options will depend on backend used.
 
-### The FT monad
-To make the wrappers safe, and reduce clutter from explicitly passing around the context, the `FT` monad is introduced. The `FT` monad is an environment monad that implicitly passes the context around as necessary. Like the `ST` monad, the `FT` monad is parameterised by a rigid type variable to prevent references to the context from escaping the monad.
+### The Fut monad
+To make the wrappers safe, and reduce clutter from explicitly passing around the context, the `Fut` monad is introduced. The `Fut` monad is an environment monad that implicitly passes the context around as necessary. Like the `ST` monad, the `Fut` monad is parameterised by a rigid type variable to prevent references to the context from escaping the monad.
 
 To run computations, the function
 
-    runFTIn :: Context -> (forall c. FT c a) -> a
+    runFutIn :: Context -> (forall c. Fut c a) -> a
 
 is used. Additionally
 
-    runFTWith :: [ContextOption] -> (forall c. FT c a) -> a
-    runFT :: (forall c. FT c a) -> a
+    runFutWith :: [ContextOption] -> (forall c. Fut c a) -> a
+    runFut :: (forall c. Fut c a) -> a
 
 are defined for convienience for cases where the context doesn't need to be reused.
 
-### The FTT transformer
-For more flexibility, the FTT monad transformer can be used. For convenience the type synonyms
+### The FutT transformer
+For more flexibility, the FutT monad transformer can be used. For convenience the type synonyms
 
-    type FT c = FTT c Identity
-    type FTIO c = FTT c IO
+    type Fut c = FutT c Identity
+    type FutIO c = FutT c IO
 
-are defined, but entry-points are in the general `Monad m => FTT c m`.
+are defined, but entry-points are in the general `Monad m => FutT c m`.
 
 To run the transformer 
     
-    runFTTIn :: Context -> (forall c. FTT c m a) -> m a
-    runFTTWith :: [ContextOption] -> (forall c. FTT c m a) -> m a
-    runFTT :: (forall c. FTT c m a) -> m a
+    runFutTIn :: Context -> (forall c. FutT c m a) -> m a
+    runFutTWith :: [ContextOption] -> (forall c. FutT c m a) -> m a
+    runFutT :: (forall c. FutT c m a) -> m a
 
 For lifting
 
-    mapFTT :: (m a -> n b) -> FTT c m a -> FTT c n b
-    map2FTT :: (m a -> n b -> k c) -> FTT c' m a -> FTT c' n b -> FTT c' k c
-    pureFT :: Monad m => FT c a -> FTT c m a
-    unsafeFromFTIO :: FTIO c a -> FT c a
+    mapFutT :: (m a -> n b) -> FutT c m a -> FutT c n b
+    map2FutT :: (m a -> n b -> k c) -> FutT c' m a -> FutT c' n b -> FutT c' k c
+    pureFut :: Monad m => Fut c a -> FutT c m a
+    unsafeFromFutIO :: FutIO c a -> Fut c a
 
 ### Input and Output
 For conversion between Futhark values and Haskell values, two classes are defined.
 
     class Input fo ho where
-        toFuthark :: Monad m => ho -> FTT c m (fo c) 
+        toFuthark :: Monad m => ho -> FutT c m (fo c) 
 
     class Output fo ho where
-        fromFuthark :: Monad m => fo c -> FTT c m ho
+        fromFuthark :: Monad m => fo c -> FutT c m ho
 
 Instances of Input and Output are generated for all transparent Futhark-arrays. The Haskell representation is `Array S` from `Data.Massiv.Array`. The absence of functional dependencies in the definitions might require more explicit type signatures, but gives more flexibility to define new instances. For tuples of instances, functions on the form `fromFutharkTN`, where `N` is the tuple size, are defined.
 
@@ -91,7 +91,7 @@ All of the wrapped values have finalizers, and should *eventually* be garbage co
 
 One way to deal with this is to manually manage the memory using
 
-    finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FTT c m ()
+    finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
 
 As with any manual memory management, the programmer is responsible for ensuring that the finalized value will not be used afterwards.
 

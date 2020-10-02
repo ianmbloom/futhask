@@ -38,7 +38,7 @@ main = do
         , (Just "TypeClasses", typeClassesHeader, typeClassesBody)
         , (Just "Context", contextHeader, contextBody)
         , (Just "Config", configHeader, configBody backend)
-        , (Just "FT", fTHeader, fTBody)
+        , (Just "Fut", futHeader, futBody)
         , (Just "Wrap", wrapHeader, wrapBody)
         , (Just "Utils", utilsHeader, utilsBody)
         , (Nothing, exportsHeader, "") ]

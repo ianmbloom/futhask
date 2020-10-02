@@ -41,7 +41,7 @@ typeClassesHeader backend = haskellHeader
     , "Input", "Output"
     , "fromFuthark", "toFuthark" ]
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
-    [ Q "Raw" "Raw", N "FT" ] 
+    [ Q "Raw" "Raw", N "Fut" ] 
     [ N "Foreign", Q "Data.Massiv.Array" "M"
     , N "Control.Monad.Trans", N "Control.Monad.IO.Class" ]
 
@@ -57,10 +57,10 @@ contextHeader backend = haskellHeader
     [Q "Raw" "Raw", N "Config" ]
     [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", Q "Control.Concurrent.MVar.Strict" "S", N "System.Mem (performGC)"]
 
-fTHeader backend = haskellHeader
-    [ "FTT", "FT", "FTIO"
-    , "runFTIn", "runFTWith", "runFT", "runFTTIn", "runFTTWith", "runFTT"
-    , "mapFTT", "map2FTT", "pureFT", "unsafeFromFTIO", "unsafeLiftFromIO" ]
+futHeader backend = haskellHeader
+    [ "FutT", "Fut", "FutIO"
+    , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
+    , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification" ]
     [ N "Context", N "Config" ]
     [ N "System.IO.Unsafe", N "Control.Monad.Trans", N "Control.Monad.Identity" ]
@@ -71,7 +71,7 @@ wrapHeader backend = haskellHeader
     , "FlexibleInstances"
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]
-    [ Q "Raw" "Raw", N "Context", N "FT", N "TypeClasses" ]
+    [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses" ]
     [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
 
     , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", Q "Control.Concurrent.MVar.Strict" "S" ]
@@ -91,7 +91,7 @@ typesHeader backend = haskellHeader
 entriesHeader backend = haskellHeader 
     []
     []
-    [ Q "Raw" "Raw", Q "Context" "C", N "FT (FTT)", Q "FT" "FT"
+    [ Q "Raw" "Raw", Q "Context" "C", N "Fut (FutT)", Q "Fut" "Fut"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)" 
@@ -104,7 +104,7 @@ utilsHeader backend = haskellHeader
     , "FlexibleInstances"
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]
-    [ Q "Raw" "Raw", N "Context", N "FT", N "TypeClasses", N "Wrap" ]
+    [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses", N "Wrap" ]
     [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
 
     , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU" ]
@@ -116,5 +116,5 @@ exportsHeader backend = haskellHeader
     , N "Config as F hiding (setOption)"
     , N "TypeClasses as F hiding (FutharkObject, FutharkArray)"
     , N "Utils as F"
-    , N "FT as F" ]
+    , N "Fut as F" ]
     []
