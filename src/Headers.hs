@@ -61,9 +61,9 @@ futHeader backend = haskellHeader
     [ "FutT", "Fut", "FutIO"
     , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
     , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
-    [ "RankNTypes", "ExistentialQuantification" ]
+    [ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
     [ N "Context", N "Config" ]
-    [ N "System.IO.Unsafe", N "Control.Monad.Trans", N "Control.Monad.Identity" ]
+    [ N "System.IO.Unsafe", N "Control.Monad.Base", N "Control.Monad.Trans", N "Control.Monad.Trans.Control", N "Control.Monad.Identity" ]
 
 wrapHeader backend = haskellHeader
     []

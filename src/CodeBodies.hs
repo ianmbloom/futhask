@@ -185,16 +185,40 @@ newtype FutT c m a = FutT (Context -> m a)
 
 instance MonadTrans (FutT c) where
     lift a = FutT (\_ -> a)
+    {-# INLINEABLE lift #-}
 
 instance Functor m => Functor (FutT c m) where
     fmap f (FutT a) = FutT (fmap f.a)
+    {-# INLINEABLE fmap #-}
 
 instance Applicative m => Applicative (FutT c m) where
     pure a = FutT (\_ -> pure a)
     (<*>) (FutT a) (FutT b) = FutT (\c -> a c <*> b c)
+    {-# INLINEABLE pure #-}
+    {-# INLINEABLE (<*>) #-}
 
 instance Monad m => Monad (FutT c m) where
     (>>=) (FutT a) f = FutT (\c -> a c >>= (\(FutT b) -> b c) . f)
+    {-# INLINEABLE (>>=) #-}
+
+instance (MonadBase b m) => MonadBase b (FutT c m) where
+    liftBase = liftBaseDefault
+    {-# INLINEABLE liftBase #-}
+
+instance MonadTransControl (FutT c) where
+    type StT (FutT c) a = a
+    liftWith a = FutT (\c -> a (\(FutT a') -> a' c))
+    restoreT = lift
+    {-# INLINEABLE liftWith #-}
+    {-# INLINEABLE restoreT #-}
+
+instance MonadBaseControl b m => MonadBaseControl b (FutT c m) where
+    type StM (FutT c m) a = ComposeSt (FutT c) m a
+    liftBaseWith = defaultLiftBaseWith
+    restoreM = defaultRestoreM
+    {-# INLINEABLE liftBaseWith #-}
+    {-# INLINEABLE restoreM #-}
+
 
 type Fut c = FutT c Identity
 type FutIO c = FutT c IO
