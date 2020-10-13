@@ -93,6 +93,10 @@ One way to deal with this is to manually manage the memory using
 
     finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
 
-As with any manual memory management, the programmer is responsible for ensuring that the finalized value will not be used afterwards.
+As with any manual memory management, the programmer is responsible for ensuring that the finalized value will not be used afterwards. For cases where the object is used in more than one thread without synchronisation,
+
+    addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
+
+can be used. `addReferenceFO` increments the reference counter of the object and `finalizeFO` will just decrement this counter until it's `0`.
 
 

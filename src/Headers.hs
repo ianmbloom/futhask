@@ -43,7 +43,7 @@ typeClassesHeader backend = haskellHeader
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
     [ Q "Raw" "Raw", N "Fut" ] 
     [ N "Foreign", Q "Data.Massiv.Array" "M"
-    , N "Control.Monad.Trans", N "Control.Monad.IO.Class" ]
+    , N "Control.Monad.Trans", N "Control.Monad.IO.Class", N "Control.Concurrent" ]
 
 configHeader backend = haskellHeader
     []
@@ -55,7 +55,7 @@ contextHeader backend = haskellHeader
     []
     []
     [Q "Raw" "Raw", N "Config" ]
-    [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", Q "Control.Concurrent.MVar.Strict" "S", N "System.Mem (performGC)"]
+    [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", N "System.Mem (performGC)"]
 
 futHeader backend = haskellHeader
     [ "FutT", "Fut", "FutIO"
@@ -69,12 +69,13 @@ wrapHeader backend = haskellHeader
     []
     [ "RankNTypes"
     , "FlexibleInstances"
+    , "FlexibleContexts"
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]
     [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses" ]
     [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
 
-    , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", Q "Control.Concurrent.MVar.Strict" "S" ]
+    , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", N "Control.Concurrent" ]
 
 typesHeader backend = haskellHeader
     []
@@ -82,6 +83,7 @@ typesHeader backend = haskellHeader
     , "MultiParamTypeClasses", "TypeSynonymInstances", "FlexibleInstances" ]
     [ Q "Raw" "Raw", N "Wrap", N "TypeClasses" ]
     [ Q "Foreign" "F", Q "Data.Massiv.Array" "M"
+    , Q "Control.Concurrent.MVar" "MV"
     , N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)"
     , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..))"

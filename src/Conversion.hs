@@ -122,11 +122,11 @@ instanceDeclarations (Var (_, n))
                      ++ "  shapeFA  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
                      ++ "  newFA    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
                      ++ "  valuesFA = Raw.values_" ++ sn ++ "\n"
-          objectString = "\nnewtype " ++ cn ++ " c = " ++ cn ++ " (F.ForeignPtr Raw." ++ rn ++ ")\n"
+          objectString = "\ndata " ++ cn ++ " c = " ++ cn ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rn ++ ")\n"
                       ++ "instance FutharkObject " ++ cn ++ " Raw." ++ rn ++ " where\n"
                       ++ "  wrapFO = " ++ cn ++ "\n"
                       ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
-                      ++ "  fromFO (" ++ cn ++ " fp) = fp\n"
+                      ++ "  fromFO (" ++ cn ++ " rc fp) = (rc, fp)\n"
           nfdataString = "instance NFData (" ++ cn ++" c) where rnf = rwhnf"
 
 instanceDeclarations _ = ""

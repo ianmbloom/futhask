@@ -7,15 +7,25 @@ import Backends
 
 typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
-    wrapFO :: ForeignPtr raw -> wrapped c
+    wrapFO :: MVar Int -> ForeignPtr raw -> wrapped c
     freeFO :: Ptr Raw.Futhark_context -> Ptr raw -> IO Int
-    fromFO :: wrapped c -> ForeignPtr raw
+    fromFO :: wrapped c -> (MVar Int, ForeignPtr raw)
     
-
 withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
-withFO = withForeignPtr . fromFO
+withFO = withForeignPtr . snd . fromFO
+
+addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
+addReferenceFO fo = lift . liftIO $
+    let (referenceCounter, _) = fromFO fo
+     in modifyMVar_ referenceCounter (\r -> pure (r+1))
+
 finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
-finalizeFO = lift . liftIO . finalizeForeignPtr . fromFO
+finalizeFO fo = lift . liftIO $
+    let (referenceCounter, pointer) = fromFO fo
+     in modifyMVar_ referenceCounter (\r 
+     -> if r > 0 
+            then pure (r-1) 
+            else finalizeForeignPtr pointer >> pure 0)
 
 
 class (FutharkObject array rawArray, Storable element, M.Index dim) 
@@ -125,7 +135,7 @@ getContext options = do
     mapM_ (setOption config) options
     context <- Raw.context_new config
     Raw.context_config_free config
-    childCount <- S.newMVar 0
+    childCount <- newMVar 0
     fmap (Context childCount)
         $ FC.newForeignPtr context 
         $ (forkIO $ freeContext childCount context)
@@ -258,11 +268,15 @@ unsafeLiftFromIO a = FutT (pure . unsafePerformIO . a)
 
 
 wrapBody = [r|
-wrapIn context@(Context childCount pointer) rawObject 
-    =  S.modifyMVar_ childCount (return.(+1))
-    >> (fmap wrapFO $ FC.newForeignPtr rawObject freeCall)
+
+wrapIn :: FutharkObject wrapped raw => Context -> Ptr raw -> IO (wrapped c)
+wrapIn context@(Context childCount pointer) rawObject = do
+    modifyMVar_ childCount (\cc -> return $! (cc+1))
+    referenceCounter <- newMVar 0
+    pointer <- FC.newForeignPtr rawObject freeCall
+    pure $! wrapFO referenceCounter pointer
     where freeCall = (inContextWithError context $ \c -> freeFO c rawObject)
-                  >> S.modifyMVar_ childCount (return.(+(-1)))
+                  >> modifyMVar_ childCount (\cc -> return $! (cc-1))
 
 peekFree p = peek p >>= \v -> free p >> return v
 peekFreeWrapIn context rawP 
