@@ -13,6 +13,7 @@ data HeaderItem
     deriving Show
 
 readExtern = fmap Preproc $ (string "extern") >> manyTill get (char '\n')
+readExtern2 = fmap Preproc $ (char '}') >> manyTill get (char '\n')
 
 isWhiteSpace = (flip elem) " \t\n"
 isNameChar = not.(flip elem) " \t\n;,()"
@@ -35,7 +36,7 @@ readFun = readTypeName >>= \tn
        >> return (Fun tn args)
 
 
-readHeaderItem = skipSpaces >> readExtern <++ readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
+readHeaderItem = skipSpaces >> readExtern <++ readExtern2 <++ readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
 readHeader fn = fmap (fst . head 
             . (readP_to_S $ many readHeaderItem >>= \his 
                          -> skipSpaces >> eof >> return his)) 
@@ -57,6 +58,7 @@ varTable =
     , ("uint32_t", "Word32")
     , ("uint64_t", "Word64")
     , ("size_t", "CSize")
+    , ("FILE", "CFile")
     , ("cl_mem", "CLMem")
     , ("cl_command_queue", "CLCommandQueue")
     , ("CUdeviceptr", "DevicePtr ()") ]

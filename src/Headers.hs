@@ -31,7 +31,7 @@ rawHeader backend = haskellHeader
     [] 
     ( [ N "Data.Int (Int8, Int16, Int32, Int64)"
       , N "Data.Word (Word8, Word16, Word32, Word64)"
-      , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..))"
+      , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..), CFile(..))"
       , N "Foreign.Ptr (Ptr)" ] ++ specific backend )
 
 typeClassesHeader backend = haskellHeader
@@ -86,7 +86,7 @@ typesHeader backend = haskellHeader
     , Q "Control.Concurrent.MVar" "MV"
     , N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)"
-    , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..))"
+    , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..), CFile(..))"
     , N "Foreign.Ptr (Ptr)"
     , N "Control.DeepSeq (rwhnf)" ]
 
