@@ -12,6 +12,7 @@ data HeaderItem
     | Var (String, String)
     deriving Show
 
+readExtern = fmap Preproc $ (string "extern") >> manyTill get (char '\n')
 
 isWhiteSpace = (flip elem) " \t\n"
 isNameChar = not.(flip elem) " \t\n;,()"
@@ -34,7 +35,7 @@ readFun = readTypeName >>= \tn
        >> return (Fun tn args)
 
 
-readHeaderItem = skipSpaces >> readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
+readHeaderItem = skipSpaces >> readExtern <++ readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
 readHeader fn = fmap (fst . head 
             . (readP_to_S $ many readHeaderItem >>= \his 
                          -> skipSpaces >> eof >> return his)) 
