@@ -10,11 +10,11 @@ globalImport (Q m a) = "import qualified " ++ m ++ " as " ++ a ++ "\n"
 localImport moduleName (N sub) = globalImport $ N (moduleName ++ "." ++ sub)
 localImport moduleName (Q sub a) = globalImport $ Q (moduleName ++ "." ++ sub) a
 
-haskellHeader exports extensions localImports globalImports moduleName subModuleName 
-    =  (if length extensions > 0 
-        then "{-# LANGUAGE " ++ intercalate ", " extensions ++ " #-}" 
+haskellHeader exports extensions localImports globalImports moduleName subModuleName
+    =  (if length extensions > 0
+        then "{-# LANGUAGE " ++ intercalate ", " extensions ++ " #-}"
         else "")
-    ++ "\nmodule " 
+    ++ "\nmodule "
     ++ moduleName ++ (case subModuleName of Nothing -> ""; Just n -> '.':n)
     ++ (if length exports > 0 then " (" ++ intercalate ", " exports ++ ")" else "")
     ++ " where\n"
@@ -28,7 +28,7 @@ specific Cuda = [N "Foreign.CUDA.Ptr(DevicePtr(..))"]
 rawHeader backend = haskellHeader
     []
     [ "ForeignFunctionInterface" ]
-    [] 
+    []
     ( [ N "Data.Int (Int8, Int16, Int32, Int64)"
       , N "Data.Word (Word8, Word16, Word32, Word64)"
       , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..), CFile(..))"
@@ -41,7 +41,7 @@ typeClassesHeader backend = haskellHeader
     , "Input", "Output"
     , "fromFuthark", "toFuthark" ]
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
-    [ Q "Raw" "Raw", N "Fut" ] 
+    [ Q "Raw" "Raw", N "Fut" ]
     [ N "Foreign", Q "Data.Massiv.Array" "M"
     , N "Control.Monad.Trans", N "Control.Monad.IO.Class", N "Control.Concurrent" ]
 
@@ -63,7 +63,7 @@ futHeader backend = haskellHeader
     , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
     [ N "Context", N "Config" ]
-    [ N "System.IO.Unsafe", N "Control.Monad.Base", N "Control.Monad.Trans", N "Control.Monad.Trans.Control", N "Control.Monad.Identity" ]
+    [ N "System.IO.Unsafe", N "Control.Monad.Base", N "Control.Monad.Trans", N "Control.Monad.Trans.Control", N "Control.Monad.Identity", N "Control.Monad.IO.Class" ]
 
 wrapHeader backend = haskellHeader
     []
@@ -90,13 +90,13 @@ typesHeader backend = haskellHeader
     , N "Foreign.Ptr (Ptr)"
     , N "Control.DeepSeq (rwhnf)" ]
 
-entriesHeader backend = haskellHeader 
+entriesHeader backend = haskellHeader
     []
     []
     [ Q "Raw" "Raw", Q "Context" "C", N "Fut (FutT)", Q "Fut" "Fut"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
-    , N "Data.Word (Word8, Word16, Word32, Word64)" 
+    , N "Data.Word (Word8, Word16, Word32, Word64)"
     , Q "Foreign" "F", N "Foreign.C.Types" ]
 
 utilsHeader backend = haskellHeader

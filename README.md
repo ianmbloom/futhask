@@ -17,11 +17,11 @@ For a simple example of how generated haskell code can be used, see [FuthaskExam
 ### Import Code
     import [ModuleName]
     import [ModuleName].Entries
-    
+
 If using `stack` add `c-sources: [Futhark.c]` to the `library` section of `package.yaml`
 
 #### OpenCL
-    extra-libraries: OpenCL 
+    extra-libraries: OpenCL
 
 #### CUDA
     include-dirs: /opt/cuda/include
@@ -57,32 +57,32 @@ are defined for convienience for cases where the context doesn't need to be reus
 ### The FutT transformer
 For more flexibility, the FutT monad transformer can be used. For convenience the type synonyms
 
-    type Fut c = FutT c Identity
-    type FutIO c = FutT c IO
+    type Fut = FutT Identity
+    type FutIO = FutT IO
 
-are defined, but entry-points are in the general `Monad m => FutT c m`.
+are defined, but entry-points are in the general `Monad m => FutT m`.
 
-To run the transformer 
-    
-    runFutTIn :: Context -> (forall c. FutT c m a) -> m a
-    runFutTWith :: [ContextOption] -> (forall c. FutT c m a) -> m a
-    runFutT :: (forall c. FutT c m a) -> m a
+To run the transformer
+
+    runFutTIn :: Context -> FutT m a -> m a
+    runFutTWith :: [ContextOption] -> FutT  m a -> m a
+    runFutT :: FutT m a -> m a
 
 For lifting
 
-    mapFutT :: (m a -> n b) -> FutT c m a -> FutT c n b
-    map2FutT :: (m a -> n b -> k c) -> FutT c' m a -> FutT c' n b -> FutT c' k c
-    pureFut :: Monad m => Fut c a -> FutT c m a
-    unsafeFromFutIO :: FutIO c a -> Fut c a
+    mapFutT :: (m a -> n b) -> FutT m a -> FutT n b
+    map2FutT :: (m a -> n b -> k c) -> FutT m a -> FutT n b -> FutT k c
+    pureFut :: Monad m => Fut a -> FutT m a
+    unsafeFromFutIO :: FutIO a -> Fut a
 
 ### Input and Output
 For conversion between Futhark values and Haskell values, two classes are defined.
 
     class Input fo ho where
-        toFuthark :: Monad m => ho -> FutT c m (fo c) 
+        toFuthark :: Monad m => ho -> FutT m fo
 
     class Output fo ho where
-        fromFuthark :: Monad m => fo c -> FutT c m ho
+        fromFuthark :: Monad m => fo -> FutT m ho
 
 Instances of Input and Output are generated for all transparent Futhark-arrays. The Haskell representation is `Array S` from `Data.Massiv.Array`. The absence of functional dependencies in the definitions might require more explicit type signatures, but gives more flexibility to define new instances. For tuples of instances, functions on the form `fromFutharkTN`, where `N` is the tuple size, are defined.
 
@@ -91,12 +91,10 @@ All of the wrapped values have finalizers, and should *eventually* be garbage co
 
 One way to deal with this is to manually manage the memory using
 
-    finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
+    finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 
 As with any manual memory management, the programmer is responsible for ensuring that the finalized value will not be used afterwards. For cases where the object is used in more than one thread without synchronisation,
 
-    addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
+    addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 
 can be used. `addReferenceFO` increments the reference counter of the object and `finalizeFO` will just decrement this counter until it's `0`.
-
-

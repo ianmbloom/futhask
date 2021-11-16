@@ -5,7 +5,7 @@ import Data.List (intercalate, partition, lookup)
 import Data.Char (toUpper)
 import Text.ParserCombinators.ReadP
 
-data HeaderItem 
+data HeaderItem
     = Preproc String
     | Comment String
     | Fun (String, String) [(String, String)]
@@ -21,28 +21,28 @@ readPreproc = fmap Preproc $ (char '#') >> manyTill get (char '\n')
 readComment = fmap Comment $ (string "/*") >> manyTill get (string "*/")
 readOnelineComment = fmap Comment $ (string "//") >> manyTill get (char '\n')
 readTypeName = skipSpaces
-            >> sepBy (munch1 (isNameChar)) (skipMany1 $ satisfy isWhiteSpace) >>= \ws 
+            >> sepBy (munch1 (isNameChar)) (skipMany1 $ satisfy isWhiteSpace) >>= \ws
             -> case ws of
                   []  -> return ("void", "")
                   [a] -> return (a, "")
                   a   -> return ( intercalate " " (init a) ++ takeWhile (=='*') (last a)
                                 , dropWhile (=='*') (last a) )
-                    
+
 readVar = readTypeName >>= \tn -> skipSpaces >> char ';' >> return (Var tn)
-readFun = readTypeName >>= \tn 
-       -> skipSpaces  
-       >> char '(' >> sepBy readTypeName (char ',') >>= \args -> char ')' 
-       >> skipSpaces >> char ';' 
+readFun = readTypeName >>= \tn
+       -> skipSpaces
+       >> char '(' >> sepBy readTypeName (char ',') >>= \args -> char ')'
+       >> skipSpaces >> char ';'
        >> return (Fun tn args)
 
 
 readHeaderItem = skipSpaces >> readExtern <++ readExtern2 <++ readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
-readHeader fn = fmap (fst . head 
-            . (readP_to_S $ many readHeaderItem >>= \his 
-                         -> skipSpaces >> eof >> return his)) 
+readHeader fn = fmap (fst . head
+            . (readP_to_S $ many readHeaderItem >>= \his
+                         -> skipSpaces >> eof >> return his))
             $ readFile fn
 
-varTable = 
+varTable =
     [ ("int", "Int")
     , ("float", "Float")
     , ("double", "Double")
@@ -63,7 +63,7 @@ varTable =
     , ("cl_command_queue", "CLCommandQueue")
     , ("CUdeviceptr", "DevicePtr ()") ]
 
-varTable2 = 
+varTable2 =
     [ ("f32", "Float")
     , ("f64", "Double")
     , ("bool", "CBool")
@@ -78,26 +78,26 @@ varTable2 =
 
 capitalize (c:cs) = toUpper c:cs
 wrapIfNotOneWord s = if elem ' ' s then "(" ++ s ++ ")" else s
-haskellType s = 
+haskellType s =
     let pn = length $ dropWhile (/='*') s
-        ts = dropWhile (=="const") $ words $ takeWhile (/='*') s
-     in (intercalate "(" $ replicate pn "Ptr ") 
-     ++ (if head ts == "struct" 
+        ts = dropWhile (=="unsigned") $ dropWhile (=="const") $ words $ takeWhile (/='*') s
+     in (intercalate "(" $ replicate pn "Ptr ")
+     ++ (if head ts == "struct"
             then capitalize $ ts !! 1
-            else (case lookup (head ts) varTable of 
-                    Just s -> s; 
-                    Nothing -> error $ "type \'" ++ s ++ "\' not found";))
+            else (case lookup (head ts) varTable of
+                    Just s -> s;
+                    Nothing -> error $ "type \'" ++ s ++ "\' not found " ++ show ts;))
      ++ replicate (pn-1) ')'
 
 haskellDeclaration (Preproc s) = ""
-haskellDeclaration (Comment s) 
-    = intercalate "\n" 
-    $ map (("--"++).dropWhile (==' ')) $ filter (/="") $ lines s 
+haskellDeclaration (Comment s)
+    = intercalate "\n"
+    $ map (("--"++).dropWhile (==' ')) $ filter (/="") $ lines s
 haskellDeclaration (Var (_, n)) = "data " ++ capitalize n
-haskellDeclaration (Fun (ot, name) args) 
+haskellDeclaration (Fun (ot, name) args)
     =  "foreign import ccall unsafe \"" ++ name ++ "\"\n  "
     ++ drop 8 name ++ "\n    :: "
-    ++ intercalate "\n    -> " 
+    ++ intercalate "\n    -> "
        ( (map haskellType $ filter (/="void") $ map fst args)
        ++ ["IO " ++ wrapIfNotOneWord (haskellType ot)] )
     ++ "\n"
@@ -105,14 +105,14 @@ haskellDeclaration (Fun (ot, name) args)
 rawImportString headerItems = intercalate "\n" $ map haskellDeclaration headerItems
 
 instanceDeclarations (Var (_, n))
-    =  (if isObject then objectString else "") 
+    =  (if isObject then objectString else "")
     ++ (if isArray  then arrayString  else "")
     where cn = capitalize sn
           rn = capitalize n
           sn = drop 8 n
-          isObject = take 7 sn /= "context" 
+          isObject = take 7 sn /= "context"
           isArray = isObject && take 6 sn /= "opaque"
-          dim = if isArray 
+          dim = if isArray
                     then read $ (:[]) $ last $ init sn
                     else 0
           element = if isArray
@@ -120,12 +120,12 @@ instanceDeclarations (Var (_, n))
                                 (Just t) -> t
                                 Nothing  -> error $ "ArrayType" ++ sn ++ " not found."
                         else ""
-          arrayString = "instance FutharkArray "++ cn ++ " Raw."++ rn 
+          arrayString = "instance FutharkArray "++ cn ++ " Raw."++ rn
                      ++ " M.Ix" ++ show dim ++ " " ++ element ++ " where\n"
                      ++ "  shapeFA  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
                      ++ "  newFA    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
                      ++ "  valuesFA = Raw.values_" ++ sn ++ "\n"
-          objectString = "\ndata " ++ cn ++ " c = " ++ cn ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rn ++ ")\n"
+          objectString = "\ndata " ++ cn ++ {-" c-} " = " ++ cn ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rn ++ ")\n"
                       ++ "instance FutharkObject " ++ cn ++ " Raw." ++ rn ++ " where\n"
                       ++ "  wrapFO = " ++ cn ++ "\n"
                       ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
@@ -136,35 +136,35 @@ instanceDeclarations _ = ""
 
 instanceDeclarationString headerItems = concatMap instanceDeclarations headerItems
 
-haskellType' s = 
+haskellType' s =
     let pn = length $ dropWhile (/='*') s
         ts = dropWhile (=="const") $ words $ takeWhile (/='*') s
-     in if head ts == "struct" 
-            then capitalize (drop 8 $ ts !! 1) ++ " c"
-            else (case lookup (head ts) varTable of 
-                    Just s -> s; 
-                    Nothing -> error $ "type " ++ s ++ "not found";)
+     in if head ts == "struct"
+            then capitalize (drop 8 $ ts !! 1) -- ++ " c"
+            else (case lookup (head ts) varTable of
+                    Just s -> s;
+                    Nothing -> error $ "type' " ++ s ++ "not found";)
 
 
-entryCall (Fun (_, n) args) 
-    = if isEntry 
+entryCall (Fun (_, n) args)
+    = if isEntry
         then "\n" ++ typeDeclaration ++ input ++ preCall ++ call ++ postCall
         else ""
     where
         sn = drop 8 n
         isEntry = take 5 sn == "entry"
         en = drop 6 sn
-        isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable 
-                    of Just _ -> False; Nothing -> True; 
+        isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable
+                    of Just _ -> False; Nothing -> True;
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
-        typeDeclaration = en ++ "\n  :: Monad m \n  => " 
+        typeDeclaration = en ++ "\n  :: Monad m \n  => "
                        ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FutT c m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
+                       ++ "FutT m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
         input = unwords (en : map snd inArgs) ++ "\n  =  Fut.unsafeLiftFromIO $ \\context\n  -> "
-        preCall = concat 
+        preCall = concat
                 $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
-               ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs 
-        call = "C.inContextWithError context (\\context'\n  -> Raw." ++ sn ++ " context' " 
+               ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs
+        call = "C.inContextWithError context (\\context'\n  -> Raw." ++ sn ++ " context' "
             ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
         peek o = if isFO o then "U.peekFreeWrapIn context " else "U.peekFree "
         postCall = (if length outArgs > 1
@@ -174,5 +174,5 @@ entryCall (Fun (_, n) args)
                 ++ "\n"
 
 entryCall _ = ""
-        
+
 entryCallString headerItems = concatMap entryCall headerItems

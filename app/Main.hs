@@ -11,9 +11,9 @@ import Conversion
 import Headers
 import Backends
 
-writeModule backend directory moduleName (subModuleName, headerF, body) 
+writeModule backend directory moduleName (subModuleName, headerF, body)
     = writeFile fn string
-    where fn = directory ++ "/" ++ moduleName 
+    where fn = directory ++ "/" ++ moduleName
             ++ (case subModuleName of Just n -> "/" ++ n; Nothing -> "") ++ ".hs"
           string = headerF backend moduleName subModuleName ++ body
 
@@ -29,7 +29,7 @@ main = do
         "cuda"   -> return Cuda
         _        -> error $ "unknown backend: " ++ backendS ++ "\n  available backends: c, opencl, cuda"
     header <- readHeader headerName
-    
+    -- putStrLn $ show header
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     mapM_ (writeModule backend srcDir moduleName)
         [ (Just "Raw", rawHeader, rawImportString header)
@@ -42,4 +42,3 @@ main = do
         , (Just "Wrap", wrapHeader, wrapBody)
         , (Just "Utils", utilsHeader, utilsBody)
         , (Nothing, exportsHeader, "") ]
-
