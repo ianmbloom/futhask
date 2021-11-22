@@ -85,12 +85,12 @@ setOption config option = case option of
     (DefaultGroupNum n)  -> Raw.context_config_set_default_num_groups config n
     (DefaultTileSize s)  -> Raw.context_config_set_default_tile_size  config s
     (DefaultThreshold n) -> Raw.context_config_set_default_threshold  config n
-    (Size name s)        -> withCString name $ \n -> Raw.context_config_set_size config n s
-                                           >>= \code -> if code == 0
-                                                           then return ()
-                                                           else error "invalid size"
+    (Size name s)        -> error "ContextOption Size is deprecated."
 |]
-
+                          -- withCString name $ \n -> Raw.context_config_set_size config n s
+                          --                >>= \code -> if code == 0
+                          --                                then return ()
+                          --                                else error "invalid size"
 configBody Cuda = [r|
 data ContextOption
     = NvrtcOptions [String]
@@ -120,12 +120,12 @@ setOption config option = case option of
     (DefaultGroupNum n)  -> Raw.context_config_set_default_num_groups config n
     (DefaultTileSize s)  -> Raw.context_config_set_default_tile_size  config s
     (DefaultThreshold n) -> Raw.context_config_set_default_threshold  config n
-    (Size name s)        -> withCString name $ \n -> Raw.context_config_set_size config n s
-                                           >>= \code -> if code == 0
-                                                           then return ()
-                                                           else error "invalid size"
+    (Size name s)        -> error "ContextOption Size is deprecated."
 |]
-
+                         -- withCString name $ \n -> Raw.context_config_set_size config n s
+                         --                >>= \code -> if code == 0
+                         --                                then return ()
+                         --                                else error "invalid size"
 contextBody = [r|
 data Context = Context (MVar Int) (ForeignPtr Raw.Futhark_context)
 
