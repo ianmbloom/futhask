@@ -9,7 +9,7 @@ import System.Environment
 import CodeBodies
 import Conversion
 import Headers
-import Backends
+import Type
 
 writeModule backend directory moduleName (subModuleName, headerF, body)
     = writeFile fn string

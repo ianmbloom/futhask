@@ -3,7 +3,7 @@
 
 module CodeBodies where
 import Text.RawString.QQ
-import Backends
+import Type
 
 typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where

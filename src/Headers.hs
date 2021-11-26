@@ -1,7 +1,7 @@
 
 module Headers where
 import Data.List (intercalate)
-import Backends
+import Type
 
 data Import = N String | Q String String
 
