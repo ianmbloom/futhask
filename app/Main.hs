@@ -19,6 +19,7 @@ writeModule backend directory moduleName (subModuleName, headerF, body)
 
 main :: IO ()
 main = do
+    putStrLn "futhask version 0.2.1"
     args <- getArgs
     [ backendS, headerName, srcDir, moduleName ] <- getArgs >>= \args -> case args of
          [a, b, c, d] -> return args

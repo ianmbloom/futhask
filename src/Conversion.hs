@@ -88,16 +88,22 @@ varTable2 =
 capitalize (c:cs) = toUpper c:cs
 wrapIfNotOneWord s = if elem ' ' s then "(" ++ s ++ ")" else s
 
+fromPointer     = dropWhile (/='*')
+beforePointer   = takeWhile (/='*')
+withoutConst    = dropWhile (=="const")
+withoutUnsigned = dropWhile (=="unsigned")
+isStruct ts     = head ts == "struct"
+
 haskellType :: String -> String
 haskellType s =
-    let pn = length $ dropWhile (/='*') s
-        ts = dropWhile (=="unsigned") $ dropWhile (=="const") $ words $ takeWhile (/='*') s
+    let pn = length $ fromPointer s
+        ts = withoutUnsigned $ withoutConst $ words $ beforePointer s
      in (intercalate "(" $ replicate pn "Ptr ")
-     ++ (if head ts == "struct"
-            then capitalize $ ts !! 1
-            else (case lookup (head ts) varTable of
-                    Just s -> s;
-                    Nothing -> error $ "type \'" ++ s ++ "\' not found " ++ show ts;))
+     ++ (if isStruct ts
+         then capitalize $ ts !! 1
+         else (case lookup (head ts) varTable of
+                 Just s -> s;
+                 Nothing -> error $ "type \'" ++ s ++ "\' not found " ++ show ts;))
      ++ replicate (pn-1) ')'
 
 haskellDeclaration :: HeaderItem -> String
@@ -117,13 +123,23 @@ haskellDeclaration item =
 rawImportString :: [HeaderItem] -> String
 rawImportString headerItems = intercalate "\n" $ map haskellDeclaration headerItems
 
+dropString string n =
+  let len = length string
+      check = take len n
+  in  if check == string
+      then drop len n
+      else error $ "dropString: " ++ n ++ "does not start with " ++ string ++ "."
+
+dropFuthark = dropString "futhark_"
+startsWith string n = take (length string) n == string
+
 instanceDeclarations :: HeaderItem -> String
 instanceDeclarations (Var (_, n)) =
-  let rn = capitalize n
-      sn = drop 8 n
-      cn = capitalize sn
-      notOpaque = take 6 sn /= "opaque"
-      isObject  = take 7 sn /= "context"
+  let rawName = capitalize n
+      suffix = dropFuthark n
+      constructorName = capitalize suffix
+      notOpaque = startsWith "opaque"  suffix
+      isObject  = startsWith "context" suffix
       isArray   = isObject && notOpaque
   in  (if isObject then objectDeclaration n else "") ++
       (if isArray  then arrayDeclaration  n else "")
@@ -131,37 +147,37 @@ instanceDeclarations _ = ""
 
 arrayDeclaration :: String -> String
 arrayDeclaration n =
-  let rn = capitalize n
-      sn = drop 8 n
-      cn = capitalize sn
-      notOpaque = take 6 sn /= "opaque"
-      isObject  = take 7 sn /= "context"
+  let rawName = capitalize n
+      suffix = dropFuthark n
+      constructorName = capitalize suffix
+      notOpaque = startsWith "opaque"  suffix
+      isObject  = startsWith "context" suffix
       isArray   = isObject && notOpaque
       dim = if isArray
-            then read $ (:[]) $ last $ init sn
+            then read $ (:[]) $ last $ init suffix
             else 0
       element = if isArray
-                then case lookup (takeWhile (/= '_') sn) varTable2 of
+                then case lookup (takeWhile (/= '_') suffix) varTable2 of
                         (Just t) -> t
-                        Nothing  -> error $ "ArrayType" ++ sn ++ " not found."
+                        Nothing  -> error $ "ArrayType" ++ suffix ++ " not found."
                 else ""
-      arrayString = "instance FutharkArray "++ cn ++ " Raw."++ rn
+      arrayString = "instance FutharkArray "++ constructorName ++ " Raw."++ rawName
                  ++ " M.Ix" ++ show dim ++ " " ++ element ++ " where\n"
-                 ++ "  shapeFA  = to" ++ show dim ++ "d Raw.shape_" ++ sn ++ "\n"
-                 ++ "  newFA    = from" ++ show dim ++ "d Raw.new_" ++ sn ++ "\n"
-                 ++ "  valuesFA = Raw.values_" ++ sn ++ "\n"
+                 ++ "  shapeFA  = to" ++ show dim ++ "d Raw.shape_" ++ suffix ++ "\n"
+                 ++ "  newFA    = from" ++ show dim ++ "d Raw.new_" ++ suffix ++ "\n"
+                 ++ "  valuesFA = Raw.values_" ++ suffix ++ "\n"
   in arrayString
 
 objectDeclaration :: String -> String
 objectDeclaration n =
-  let rn = capitalize n
-      sn = drop 8 n
-      cn = capitalize sn
-      objectString = "\ndata " ++ cn ++ {-" c-} " = " ++ cn ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rn ++ ")\n"
-                  ++ "instance FutharkObject " ++ cn ++ " Raw." ++ rn ++ " where\n"
-                  ++ "  wrapFO = " ++ cn ++ "\n"
-                  ++ "  freeFO = Raw.free_" ++ sn ++ "\n"
-                  ++ "  fromFO (" ++ cn ++ " rc fp) = (rc, fp)\n"
+  let rawName = capitalize n
+      suffix = dropFuthark n
+      constructorName = capitalize suffix
+      objectString = "\ndata " ++ constructorName ++ {-" c-} " = " ++ constructorName ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rawName ++ ")\n"
+                  ++ "instance FutharkObject " ++ constructorName ++ " Raw." ++ rawName ++ " where\n"
+                  ++ "  wrapFO = " ++ constructorName ++ "\n"
+                  ++ "  freeFO = Raw.free_" ++ suffix ++ "\n"
+                  ++ "  fromFO (" ++ constructorName ++ " rc fp) = (rc, fp)\n"
   in  objectString
 
 instanceDeclarationString :: [HeaderItem] -> String
@@ -169,10 +185,10 @@ instanceDeclarationString headerItems = concatMap instanceDeclarations headerIte
 
 haskellType' :: String -> String
 haskellType' s =
-    let pn = length $ dropWhile (/='*') s
-        ts = dropWhile (=="const") $ words $ takeWhile (/='*') s
-     in if head ts == "struct"
-        then capitalize (drop 8 $ ts !! 1) -- ++ " c"
+    let pn = length $ fromPointer s
+        ts = withoutConst $ words $ beforePointer s
+     in if isStruct ts
+        then capitalize (dropFuthark $ ts !! 1) -- ++ " c"
         else (case lookup (head ts) varTable of
                 Just s -> s;
                 Nothing -> error $ "type' " ++ s ++ "not found";)
@@ -183,9 +199,9 @@ entryCall (Fun (_, n) args) =
     then "\n" ++ typeDeclaration ++ input ++ preCall ++ call ++ postCall
     else ""
     where
-        sn = drop 8 n
-        isEntry = take 5 sn == "entry"
-        en = drop 6 sn
+        suffix = dropFuthark n
+        isEntry = take 5 suffix == "entry"
+        en = drop 6 suffix
         isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable
                     of Just _ -> False; Nothing -> True;
         (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
@@ -196,7 +212,7 @@ entryCall (Fun (_, n) args) =
         preCall = concat
                 $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
                ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs
-        call = "C.inContextWithError context (\\context'\n  -> Raw." ++ sn ++ " context' "
+        call = "C.inContextWithError context (\\context'\n  -> Raw." ++ suffix ++ " context' "
             ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
         peek o = if isFO o then "U.peekFreeWrapIn context " else "U.peekFree "
         postCall = (if length outArgs > 1
