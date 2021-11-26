@@ -138,8 +138,8 @@ instanceDeclarations (Var (_, n)) =
   let rawName = capitalize n
       suffix = dropFuthark n
       constructorName = capitalize suffix
-      notOpaque = startsWith "opaque"  suffix
-      isObject  = startsWith "context" suffix
+      notOpaque = not $ startsWith "opaque"  suffix
+      isObject  = not $ startsWith "context" suffix
       isArray   = isObject && notOpaque
   in  (if isObject then objectDeclaration n else "") ++
       (if isArray  then arrayDeclaration  n else "")
@@ -150,8 +150,8 @@ arrayDeclaration n =
   let rawName = capitalize n
       suffix = dropFuthark n
       constructorName = capitalize suffix
-      notOpaque = startsWith "opaque"  suffix
-      isObject  = startsWith "context" suffix
+      notOpaque = not $ startsWith "opaque"  suffix
+      isObject  = not $ startsWith "context" suffix
       isArray   = isObject && notOpaque
       dim = if isArray
             then read $ (:[]) $ last $ init suffix
