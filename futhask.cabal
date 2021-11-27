@@ -29,6 +29,7 @@ library
       Conversion
       Headers
       Manifest
+      ReadHeader
       Type
   other-modules:
       Paths_futhask
@@ -37,6 +38,7 @@ library
   build-depends:
       aeson >=2.0.2.0
     , base >=4.7 && <4.15
+    , bytestring
     , containers
     , directory >=1.3.3 && <1.4
     , raw-strings-qq ==1.1.*
@@ -55,6 +57,7 @@ executable futhask
   build-depends:
       aeson >=2.0.2.0
     , base >=4.7 && <4.15
+    , bytestring
     , containers
     , directory >=1.3.3 && <1.4
     , futhask

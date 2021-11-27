@@ -9,6 +9,8 @@ import System.Environment
 import CodeBodies
 import Conversion
 import Headers
+import ReadHeader
+import Manifest
 import Type
 
 writeModule backend directory moduleName (subModuleName, headerF, body)
@@ -30,12 +32,13 @@ main = do
         "cuda"   -> return Cuda
         _        -> error $ "unknown backend: " ++ backendS ++ "\n  available backends: c, opencl, cuda"
     header <- readHeader headerName
+    -- manifest <- readManifest headerName
     -- putStrLn $ show header
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     mapM_ (writeModule backend srcDir moduleName)
-        [ (Just "Raw", rawHeader, rawImportString header)
-        , (Just "Entries", entriesHeader, entryCallString header)
-        , (Just "Types", typesHeader, instanceDeclarationString header)
+        [ (Just "Raw", rawHeader, unlines $ rawImportString header)
+        , (Just "Entries", entriesHeader, unlines $ entryCallLines header)
+        , (Just "Types", typesHeader, unlines $ instanceDeclarationLines header)
         , (Just "TypeClasses", typeClassesHeader, typeClassesBody)
         , (Just "Context", contextHeader, contextBody)
         , (Just "Config", configHeader, configBody backend)

@@ -23,6 +23,7 @@ dependencies:
 - containers
 - text
 - unordered-containers
+- bytestring
 
 library:
   source-dirs: src

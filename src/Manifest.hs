@@ -32,6 +32,7 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.HashMap.Lazy as HML ( lookup )
+import qualified Data.ByteString.Lazy as BS
 
 -- | Manifest info for an entry point parameter.
 data Input = Input
@@ -160,3 +161,5 @@ instance JSON.FromJSON Type where
         "opaque" ->
           TypeOpaque <$> ty .: "ctype"   --
                      <*> ty .: "ops"     --
+
+readManifest filePath = JSON.decode <$> BS.readFile filePath

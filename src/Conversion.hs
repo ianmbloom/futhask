@@ -4,52 +4,7 @@ import Data.Maybe
 import Data.List (intercalate, partition, lookup)
 import Data.Char (toUpper)
 import Text.ParserCombinators.ReadP
-
-data HeaderItem
-    = Preproc String
-    | Comment String
-    | Fun (String, String) [(String, String)]
-    | Var (String, String)
-    deriving Show
-
-readExtern :: ReadP HeaderItem
-readExtern = fmap Preproc $ (string "extern") >> manyTill get (char '\n')
-
-readExtern2 = fmap Preproc $ (char '}') >> manyTill get (char '\n')
-
-isWhiteSpace :: Char -> Bool
-isWhiteSpace = (flip elem) " \t\n"
-isNameChar = not.(flip elem) " \t\n;,()"
-
-readPreproc :: ReadP HeaderItem
-readPreproc = fmap Preproc $ (char '#') >> manyTill get (char '\n')
-readComment :: ReadP HeaderItem
-readComment = fmap Comment $ (string "/*") >> manyTill get (string "*/")
-readOnelineComment = fmap Comment $ (string "//") >> manyTill get (char '\n')
-readTypeName = skipSpaces
-            >> sepBy (munch1 (isNameChar)) (skipMany1 $ satisfy isWhiteSpace) >>= \ws
-            -> case ws of
-                  []  -> return ("void", "")
-                  [a] -> return (a, "")
-                  a   -> return ( intercalate " " (init a) ++ takeWhile (=='*') (last a)
-                                , dropWhile (=='*') (last a) )
-
-readVar :: ReadP HeaderItem
-readVar = readTypeName >>= \tn -> skipSpaces >> char ';' >> return (Var tn)
-readFun :: ReadP HeaderItem
-readFun = readTypeName >>= \tn
-       -> skipSpaces
-       >> char '(' >> sepBy readTypeName (char ',') >>= \args -> char ')'
-       >> skipSpaces >> char ';'
-       >> return (Fun tn args)
-
-
-readHeaderItem :: ReadP HeaderItem
-readHeaderItem = skipSpaces >> readExtern <++ readExtern2 <++ readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
-readHeader fn = fmap (fst . head
-            . (readP_to_S $ many readHeaderItem >>= \his
-                         -> skipSpaces >> eof >> return his))
-            $ readFile fn
+import ReadHeader
 
 varTable =
     [ ("int", "Int")
@@ -88,6 +43,16 @@ varTable2 =
 capitalize (c:cs) = toUpper c:cs
 wrapIfNotOneWord s = if elem ' ' s then "(" ++ s ++ ")" else s
 
+startsWith string n = take (length string) n == string
+dropString string n =
+  let len = length string
+      check = take len n
+  in  if check == string
+      then drop len n
+      else error $ "dropString: " ++ n ++ "does not start with " ++ string ++ "."
+
+dropFuthark     = dropString "futhark_"
+dropEntry       = dropString "entry_"
 fromPointer     = dropWhile (/='*')
 beforePointer   = takeWhile (/='*')
 withoutConst    = dropWhile (=="const")
@@ -106,46 +71,41 @@ haskellType s =
                  Nothing -> error $ "type \'" ++ s ++ "\' not found " ++ show ts;))
      ++ replicate (pn-1) ')'
 
-haskellDeclaration :: HeaderItem -> String
+mapTail g f (a:as) = g a:map f as
+mapTail g f [] = []
+
+haskellDeclaration :: HeaderItem -> [String]
 haskellDeclaration item =
     case item of
-        Preproc s -> ""
-        Comment s -> intercalate "\n"
-                     $ map (("--"++).dropWhile (==' ')) $ filter (/="") $ lines s
-        Var (_, n) -> "data " ++ capitalize n
-        Fun (ot, name) args -> "foreign import ccall unsafe \"" ++ name ++ "\"\n  "
-                               ++ drop 8 name ++ "\n    :: "
-                               ++ intercalate "\n    -> "
-                                  ( (map haskellType $ filter (/="void") $ map fst args)
-                                  ++ ["IO " ++ wrapIfNotOneWord (haskellType ot)] )
-                               ++ "\n"
+        Preproc s -> []
+        Comment s -> map (("--"++).dropWhile (==' ')) $ filter (/="") $ lines s
+        Var (Arg _  n   ) -> ["data " ++ capitalize n]
+        Fun (Arg ot name) args ->
+            [ "foreign import ccall unsafe \"" ++ name ++ "\""
+            , "  " ++ dropFuthark name
+            ] ++
+            mapTail ("    :: " ++) ("    -> " ++)
+                ( (map haskellType $ filter (/="void") $ map argType args)
+                  ++ ["IO " ++ wrapIfNotOneWord (haskellType ot)] )
 
-rawImportString :: [HeaderItem] -> String
-rawImportString headerItems = intercalate "\n" $ map haskellDeclaration headerItems
 
-dropString string n =
-  let len = length string
-      check = take len n
-  in  if check == string
-      then drop len n
-      else error $ "dropString: " ++ n ++ "does not start with " ++ string ++ "."
+rawImportString :: [HeaderItem] -> [String]
+rawImportString headerItems = concatMap haskellDeclaration headerItems
 
-dropFuthark = dropString "futhark_"
-startsWith string n = take (length string) n == string
 
-instanceDeclarations :: HeaderItem -> String
-instanceDeclarations (Var (_, n)) =
+instanceDeclarations :: HeaderItem -> [String]
+instanceDeclarations (Var (Arg _ n)) =
   let rawName = capitalize n
       suffix = dropFuthark n
       constructorName = capitalize suffix
       notOpaque = not $ startsWith "opaque"  suffix
       isObject  = not $ startsWith "context" suffix
       isArray   = isObject && notOpaque
-  in  (if isObject then objectDeclaration n else "") ++
-      (if isArray  then arrayDeclaration  n else "")
-instanceDeclarations _ = ""
+  in  (if isObject then objectDeclaration n else []) ++
+      (if isArray  then arrayDeclaration  n else [])
+instanceDeclarations _ = []
 
-arrayDeclaration :: String -> String
+arrayDeclaration :: String -> [String]
 arrayDeclaration n =
   let rawName = capitalize n
       suffix = dropFuthark n
@@ -161,27 +121,32 @@ arrayDeclaration n =
                         (Just t) -> t
                         Nothing  -> error $ "ArrayType" ++ suffix ++ " not found."
                 else ""
-      arrayString = "instance FutharkArray "++ constructorName ++ " Raw."++ rawName
-                 ++ " M.Ix" ++ show dim ++ " " ++ element ++ " where\n"
-                 ++ "  shapeFA  = to" ++ show dim ++ "d Raw.shape_" ++ suffix ++ "\n"
-                 ++ "  newFA    = from" ++ show dim ++ "d Raw.new_" ++ suffix ++ "\n"
-                 ++ "  valuesFA = Raw.values_" ++ suffix ++ "\n"
+      dimStr = show dim
+      arrayString =
+        [ "instance FutharkArray "++ constructorName ++ " Raw." ++ rawName ++ " M.Ix" ++ dimStr ++ " " ++ element ++ " where"
+        , "  shapeFA  = to" ++ dimStr ++ "d Raw.shape_" ++ suffix
+        , "  newFA    = from" ++ dimStr ++ "d Raw.new_" ++ suffix
+        , "  valuesFA = Raw.values_" ++ suffix
+        ]
   in arrayString
 
-objectDeclaration :: String -> String
+objectDeclaration :: String -> [String]
 objectDeclaration n =
   let rawName = capitalize n
       suffix = dropFuthark n
       constructorName = capitalize suffix
-      objectString = "\ndata " ++ constructorName ++ {-" c-} " = " ++ constructorName ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rawName ++ ")\n"
-                  ++ "instance FutharkObject " ++ constructorName ++ " Raw." ++ rawName ++ " where\n"
-                  ++ "  wrapFO = " ++ constructorName ++ "\n"
-                  ++ "  freeFO = Raw.free_" ++ suffix ++ "\n"
-                  ++ "  fromFO (" ++ constructorName ++ " rc fp) = (rc, fp)\n"
+      objectString =
+        [ ""
+        , "data " ++ constructorName ++ {-" c-} " = " ++ constructorName ++ " (MV.MVar Int) (F.ForeignPtr Raw." ++ rawName ++ ")"
+        , "instance FutharkObject " ++ constructorName ++ " Raw." ++ rawName ++ " where"
+        , "  wrapFO = " ++ constructorName
+        , "  freeFO = Raw.free_" ++ suffix
+        , "  fromFO (" ++ constructorName ++ " rc fp) = (rc, fp)"
+        ]
   in  objectString
 
-instanceDeclarationString :: [HeaderItem] -> String
-instanceDeclarationString headerItems = concatMap instanceDeclarations headerItems
+instanceDeclarationLines :: [HeaderItem] -> [String]
+instanceDeclarationLines headerItems = concatMap instanceDeclarations headerItems
 
 haskellType' :: String -> String
 haskellType' s =
@@ -193,35 +158,75 @@ haskellType' s =
                 Just s -> s;
                 Nothing -> error $ "type' " ++ s ++ "not found";)
 
-entryCall :: HeaderItem -> String
-entryCall (Fun (_, n) args) =
+indentTail a b = mapTail (a++) (b++)
+
+inTupleMore ls =
+  if length ls > 1
+  then indentTail "( " ", " ls ++ [")"]
+  else ls
+
+makeConstraints :: [String] -> [String]
+makeConstraints = inTupleMore
+
+typeWithConstraints :: [String] -> [String] -> [String]
+typeWithConstraints constraintLines typeLines =
+  if length constraintLines > 0
+  then    indentTail " :: " "    " constraintLines
+       ++ indentTail " => " " -> " typeLines
+  else    indentTail " :: " " -> " typeLines
+
+mightTuple ls =
+  if length ls <= 1
+  then concat ls
+  else "(" ++ intercalate ", " ls ++ ")"
+
+arrowBefore x = "  -> " ++ x
+
+
+
+entryCall :: HeaderItem -> [String]
+entryCall (Fun (Arg _ n) args) =
     if isEntry
-    then "\n" ++ typeDeclaration ++ input ++ preCall ++ call ++ postCall
-    else ""
+    then     typeDeclaration
+          ++ input
+          ++ map arrowBefore (   preCall
+                              ++ call
+                             )
+          ++ postCall
+          ++ [""]
+    else []
     where
         suffix = dropFuthark n
-        isEntry = take 5 suffix == "entry"
-        en = drop 6 suffix
-        isFO a = case lookup (takeWhile (/='*') $ last $ words $ fst a) varTable
-                    of Just _ -> False; Nothing -> True;
-        (inArgs, outArgs) = partition ((=="in").take 2.snd) $ tail args
-        typeDeclaration = en ++ "\n  :: Monad m \n  => "
-                       ++ concatMap (\i -> haskellType' (fst i) ++ "\n  -> " ) inArgs
-                       ++ "FutT m " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> haskellType' $ fst o) outArgs) ++ "\n"
-        input = unwords (en : map snd inArgs) ++ "\n  =  Fut.unsafeLiftFromIO $ \\context\n  -> "
-        preCall = concat
-                $ map (\i -> "T.withFO " ++ snd i ++ " $ \\" ++ snd i ++ "'\n  -> ") (filter isFO inArgs)
-               ++ map (\o -> "F.malloc >>= \\" ++ snd o ++ "\n  -> ") outArgs
-        call = "C.inContextWithError context (\\context'\n  -> Raw." ++ suffix ++ " context' "
-            ++ unwords ((map snd $ outArgs) ++ (map (\i -> if isFO i then snd i ++ "'" else snd i) inArgs)) ++ ")\n  >> "
+        isEntry = startsWith "entry" suffix
+        entryName = dropEntry suffix
+        isFO a = not . isJust $ lookup (beforePointer $ last $ words $ argType a) varTable
+        (inArgs, outArgs) = partition (startsWith "in" . argName ) $ tail args
+        inArgTys    = map argType inArgs
+        inArgNames  = map argName inArgs
+        outArgTys   = map argType outArgs
+        outArgNames = map argName outArgs
+        typeDeclaration = [entryName] ++
+                          (typeWithConstraints ["Monad m"] $
+                              map (\i -> haskellType' (argType i)) inArgs
+                              ++ ["FutT m " ++ mightTuple (map (\o -> haskellType' $ argType o) outArgs)
+                                 ]
+                          )
+        input = [ unwords (entryName : map argName inArgs)
+                , "  =  Fut.unsafeLiftFromIO $ \\context"
+                ]
+        preCall =  (map (\i -> "T.withFO " ++ i ++ " $ \\" ++ i ++ "'") (map argName $ filter isFO inArgs))
+                ++ (map (\o -> "F.malloc >>= \\" ++ o) (map argName outArgs))
+        call = [ "C.inContextWithError context (\\context'"
+               , "Raw." ++ suffix ++ " context' " ++ unwords (outArgNames ++ (map (\i -> if isFO i then argName i ++ "'" else argName i) inArgs)) ++ ")"
+               ]
         peek o = if isFO o then "U.peekFreeWrapIn context " else "U.peekFree "
-        postCall = (if length outArgs > 1
-                    then  concatMap (\o -> peek o ++ snd o ++ " >>= \\" ++ snd o ++ "'\n  -> ") outArgs
-                          ++ "return " ++ wrapIfNotOneWord (intercalate ", " $ map (\o -> snd o ++ "'") outArgs)
-                    else peek (head outArgs) ++ snd (head outArgs)
-                   )
-                ++ "\n"
-entryCall _ = ""
+        postCall = indentTail "  >> " "  -> " $
+                   if length outArgs > 1
+                   then  map (\o -> peek o ++ argName o ++ " >>= \\" ++ argName o ++ "'") outArgs
+                         ++ ["return " ++ mightTuple (map (\o -> o ++ "'") outArgNames)]
+                   else [peek (head outArgs) ++ head outArgNames]
 
-entryCallString :: [HeaderItem] -> String
-entryCallString headerItems = concatMap entryCall headerItems
+entryCall _ = []
+
+entryCallLines :: [HeaderItem] -> [String]
+entryCallLines headerItems = concatMap entryCall headerItems
