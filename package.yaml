@@ -21,7 +21,7 @@ dependencies:
 - split            >= 0.2.3 && < 0.3
 - aeson            >= 2.0.2.0
 - containers
-- text
+- text             >= 1.2.4.1
 - unordered-containers
 - bytestring
 

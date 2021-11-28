@@ -6,6 +6,7 @@ import Data.List (intercalate)
 import Debug.Trace
 import System.Directory
 import System.Environment
+import qualified Data.Text as T
 import CodeBodies
 import Conversion
 import Headers
@@ -36,9 +37,9 @@ main = do
     -- putStrLn $ show header
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     mapM_ (writeModule backend srcDir moduleName)
-        [ (Just "Raw", rawHeader, commonRawBody ++ (unlines $ rawImportString manifest))
-        , (Just "Entries", entriesHeader, unlines $ entryCallLines header)
-        , (Just "Types", typesHeader, unlines $ instanceDeclarationLines header)
+        [ (Just "Raw", rawHeader, commonRawBody ++ (T.unpack . T.unlines $ rawImportString manifest))
+        , (Just "Entries", entriesHeader, T.unpack . T.unlines $ entryCallLines manifest)
+        , (Just "Types", typesHeader, T.unpack . T.unlines $ instanceDeclarationLines manifest)
         , (Just "TypeClasses", typeClassesHeader, typeClassesBody)
         , (Just "Context", contextHeader, contextBody)
         , (Just "Config", configHeader, configBody backend)
