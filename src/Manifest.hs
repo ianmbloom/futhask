@@ -15,6 +15,7 @@ module Manifest
   , Type (..)
   , ArrayOps (..)
   , OpaqueOps (..)
+  , readManifest
   )
 where
 
@@ -28,11 +29,14 @@ import Data.Aeson ( Object(..)
                   )
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Bifunctor (bimap)
+import Data.Maybe
 import qualified Data.Map as M
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import qualified Data.HashMap.Lazy as HML ( lookup )
 import qualified Data.ByteString.Lazy as BS
+
+import Type
 
 -- | Manifest info for an entry point parameter.
 data Input = Input
@@ -96,15 +100,15 @@ data Type
 data Manifest = Manifest
   { -- | A mapping from Futhark entry points to how they are
     -- represented in C.
-    manifestEntryPoints :: M.Map T.Text EntryPoint,
+    manifestEntryPoints :: M.Map T.Text EntryPoint
     -- | A mapping from Futhark type name to how they are represented
     -- at the C level.  Should not contain any of the primitive scalar
     -- types.  For array types, these have empty dimensions,
     -- e.g. @[]i32@.
-    manifestTypes :: M.Map T.Text Type,
+  , manifestTypes :: M.Map T.Text Type
     -- | The compiler backend used to
     -- compile the program, e.g. @c@.
-    manifestBackend :: T.Text
+  , manifestBackend :: Backend
   }
   deriving (Eq, Ord, Show)
 
@@ -121,12 +125,19 @@ instance JSON.FromJSON OpaqueOps where
               <*> v .: "store"   --
               <*> v .: "restore" --
 
+instance JSON.FromJSON Backend where
+  parseJSON (String v) =
+    case v of
+      "c"      -> return C
+      "opencl" -> return OpenCL
+      "cuda"   -> return Cuda
+      backend  -> error $ "unknown backend: " ++ T.unpack backend ++ "\n  available backends: c, opencl, cuda"
 
 instance JSON.FromJSON Manifest where
   parseJSON (Object v) =
-    Manifest <$> v .: "backend"      --
-             <*> v .: "entry_points" --
+    Manifest <$> v .: "entry_points" --
              <*> v .: "types"        --
+             <*> v .: "backend"      --
 -- entrypoints -- object $ map (bimap JSON.fromText onEntryPoint) $ M.toList entry_points
 -- types object $ map (bimap JSON.fromText onType) $ M.toList types
 
@@ -162,4 +173,9 @@ instance JSON.FromJSON Type where
           TypeOpaque <$> ty .: "ctype"   --
                      <*> ty .: "ops"     --
 
-readManifest filePath = JSON.decode <$> BS.readFile filePath
+readManifest :: FilePath -> IO Manifest
+readManifest filePath = do
+  eManifest <- JSON.eitherDecode <$> BS.readFile filePath
+  case eManifest of
+    Left message   -> error message
+    Right manifest -> return manifest

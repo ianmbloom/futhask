@@ -31,12 +31,12 @@ main = do
         "opencl" -> return OpenCL
         "cuda"   -> return Cuda
         _        -> error $ "unknown backend: " ++ backendS ++ "\n  available backends: c, opencl, cuda"
-    header <- readHeader headerName
-    -- manifest <- readManifest headerName
+    header   <- readHeader   (headerName ++ ".h"   )
+    manifest <- readManifest (headerName ++ ".json")
     -- putStrLn $ show header
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     mapM_ (writeModule backend srcDir moduleName)
-        [ (Just "Raw", rawHeader, unlines $ rawImportString header)
+        [ (Just "Raw", rawHeader, commonRawBody ++ (unlines $ rawImportString manifest))
         , (Just "Entries", entriesHeader, unlines $ entryCallLines header)
         , (Just "Types", typesHeader, unlines $ instanceDeclarationLines header)
         , (Just "TypeClasses", typeClassesHeader, typeClassesBody)

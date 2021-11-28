@@ -25,13 +25,19 @@ readExtern2 = fmap Preproc $ (char '}') >> manyTill get (char '\n')
 
 isWhiteSpace :: Char -> Bool
 isWhiteSpace = (flip elem) " \t\n"
+
+isNameChar :: Char -> Bool
 isNameChar = not.(flip elem) " \t\n;,()"
 
 readPreproc :: ReadP HeaderItem
 readPreproc = fmap Preproc $ (char '#') >> manyTill get (char '\n')
+
 readComment :: ReadP HeaderItem
 readComment = fmap Comment $ (string "/*") >> manyTill get (string "*/")
+
+readOnelineComment :: ReadP HeaderItem
 readOnelineComment = fmap Comment $ (string "//") >> manyTill get (char '\n')
+
 readTypeName :: ReadP Arg
 readTypeName = skipSpaces
             >> sepBy (munch1 (isNameChar)) (skipMany1 $ satisfy isWhiteSpace) >>= \ws
@@ -43,6 +49,7 @@ readTypeName = skipSpaces
 
 readVar :: ReadP HeaderItem
 readVar = readTypeName >>= \tn -> skipSpaces >> char ';' >> return (Var tn)
+
 readFun :: ReadP HeaderItem
 readFun = readTypeName >>= \tn
        -> skipSpaces
@@ -50,10 +57,17 @@ readFun = readTypeName >>= \tn
        >> skipSpaces >> char ';'
        >> return (Fun tn args)
 
-
 readHeaderItem :: ReadP HeaderItem
-readHeaderItem = skipSpaces >> readExtern <++ readExtern2 <++ readPreproc <++ readComment <++ readOnelineComment <++ readFun <++ readVar
+readHeaderItem =   skipSpaces
+               >>  readExtern
+               <++ readExtern2
+               <++ readPreproc
+               <++ readComment
+               <++ readOnelineComment
+               <++ readFun
+               <++ readVar
 
+readHeader :: FilePath -> IO [HeaderItem]
 readHeader fn = fmap (fst . head
             . (readP_to_S $ many readHeaderItem >>= \his
                          -> skipSpaces >> eof >> return his))

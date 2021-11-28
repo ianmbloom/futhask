@@ -27,6 +27,8 @@ library
   exposed-modules:
       CodeBodies
       Conversion
+      ConvertType
+      Debug
       Headers
       Manifest
       ReadHeader

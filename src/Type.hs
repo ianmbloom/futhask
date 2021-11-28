@@ -3,6 +3,7 @@ module Type
 where
 
 data Backend = C | OpenCL | Cuda
+  deriving (Eq, Ord, Show)
 
 type TypeName = String
 type EntryName = String
