@@ -30,7 +30,6 @@ library
       Debug
       Headers
       Manifest
-      ReadHeader
       Type
   other-modules:
       Paths_futhask

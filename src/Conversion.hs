@@ -6,35 +6,13 @@ import Data.Maybe
 import Data.List (intercalate, partition, lookup)
 import Data.Char (toUpper)
 import Text.ParserCombinators.ReadP
-import ReadHeader
 import Manifest
 import qualified Data.Map  as M
-import Data.Map ((!?))
+import Data.Map ((!))
 import qualified Data.Text as T
 import Data.Text (Text(..))
 import Debug
 import Data.String (IsString(..))
-
-varTable =
-    [ ("int", "Int")
-    , ("float", "Float")
-    , ("double", "Double")
-    , ("char", "CChar")
-    , ("bool", "CBool")
-    , ("void", "()")
-    , ("int8_t" , "Int8")
-    , ("int16_t", "Int16")
-    , ("int32_t", "Int32")
-    , ("int64_t", "Int64")
-    , ("uint8_t" , "Word8")
-    , ("uint16_t", "Word16")
-    , ("uint32_t", "Word32")
-    , ("uint64_t", "Word64")
-    , ("size_t", "CSize")
-    , ("FILE", "CFile")
-    , ("cl_mem", "CLMem")
-    , ("cl_command_queue", "CLCommandQueue")
-    , ("CUdeviceptr", "DevicePtr ()") ]
 
 primTable =
     [ ("f32", "Float" )
@@ -49,11 +27,10 @@ primTable =
     , ("u32", "Word32")
     , ("u64", "Word64") ]
 
+capitalize :: Text -> Text
 capitalize text = T.singleton (toUpper (T.head text)) <> T.tail text
 wrapIfNotOneWord :: Text -> Text
 wrapIfNotOneWord s = if length (T.words s) > 1 then "(" <> s <> ")" else s
-
-startsWith parts n = take (length parts) n == parts
 
 dropText :: Text -> Text -> Text
 dropText text n =
@@ -64,22 +41,15 @@ dropText text n =
       else error $ "dropText: " ++ T.unpack n ++ "does not start with " ++ T.unpack text ++ "."
 
 dropFuthark     = dropText "futhark_"
-dropEntry       = dropText "entry_"
-fromPointer     = T.dropWhile (/='*')
-beforePointer   = T.takeWhile (/='*')
-withoutConst    = dropWhile (=="const")
-withoutUnsigned = dropWhile (=="unsigned")
 
 mapTail g f (a:as) = g a:map f as
 mapTail g f [] = []
 
 pointerLevel :: Int -> Text -> Text
-pointerLevel i a = if i > 0
-                   then "Ptr " <> wrapIfNotOneWord (pointerLevel (i-1) a)
-                   else a
-
-isStruct :: [Text] -> Bool
-isStruct = startsWith ["struct"]
+pointerLevel i a =
+  if i > 0
+  then "Ptr " <> wrapIfNotOneWord (pointerLevel (i-1) a)
+  else a
 
 data NameSource = Raw | Api
 
@@ -89,45 +59,37 @@ futharkPrimitiveToHaskellType primitive =
     Just  s -> s
     Nothing -> error $ "type \'" ++ T.unpack primitive ++ "\' not found."
 
-simpleTypeToHaskell :: NameSource -> Text -> Text
-simpleTypeToHaskell src simple =
-  let ts = withoutUnsigned $ withoutConst $ T.words $ simple
-  in  if isStruct ts
-      then let part = ts !! 1
-               cropPart = case src of
-                             Raw -> part
-                             Api -> dropFuthark part
-           in  cropPart
-      else futharkPrimitiveToHaskellType (head ts)
+buildArrayType :: Text -> Int -> Text
+buildArrayType elemType rank =
+  elemType <> "_" <> (T.pack $ show rank) <> "d"
 
-foreignTypeToHaskell :: NameSource -> Type -> Text
-foreignTypeToHaskell nameSource ty =
-  let cType = case ty of
-                TypeArray  {} -> tyArrayCType  ty
-                TypeOpaque {} -> tyOpaqueCType ty
-      simple = beforePointer cType
-  in  simpleTypeToHaskell nameSource simple
+typeToHaskellPointer :: Manifest -> NameSource -> Int -> Int -> Text -> Text
+typeToHaskellPointer manifest src primLevel arrayLevel key =
+  let ty       = manifestTypes manifest ! key
+      elemType = tyArrayElemType ty
+      rank     = tyArrayRank     ty
+      mPrim    = lookup key primTable
+      level    = case mPrim of
+                   Just {} -> primLevel
+                   Nothing -> arrayLevel
+      prefix   = case src of
+                   Raw -> "futark_"
+                   Api -> ""
+  in pointerLevel level $
+     case mPrim of
+        Just prim -> prim
+        Nothing   ->
+          case ty of
+            TypeArray  {} -> prefix <> buildArrayType elemType rank
+            TypeOpaque {} -> prefix <> "opaque_" <> key
 
-typeToHaskell :: Manifest -> NameSource -> Int -> Int -> Text -> Text
-typeToHaskell manifest nameSource primLevel arrayLevel ty =
-    let eType = lookupType manifest ty
-    in
-    case eType of
-      Right text ->
-        pointerLevel primLevel $ simpleTypeToHaskell nameSource $ text
-      Left ty ->
-        pointerLevel arrayLevel $ foreignTypeToHaskell nameSource ty
+typeToHaskell :: Manifest -> NameSource -> Text -> Text
+typeToHaskell manifest src key =
+  typeToHaskellPointer manifest src 0 0 key
 
-lookupType :: Manifest -> T.Text -> Either Type T.Text
-lookupType manifest text =
-  case manifestTypes manifest !? text of
-    Nothing -> Right text
-    Just ty -> Left  ty
-
-foreignDataDeclaration :: Type -> [Text]
-foreignDataDeclaration ty =
-    let name = capitalize $ foreignTypeToHaskell Raw ty
-    in  ["data " <> capitalize name]
+foreignDataDeclaration :: Text -> [Text]
+foreignDataDeclaration haskellTy =
+    ["data " <> capitalize haskellTy]
 
 foreignImportCall :: Text -> [Text] -> Text -> [Text]
 foreignImportCall futName params ret =
@@ -141,81 +103,83 @@ foreignImportCall futName params ret =
 
 primPointer = pointerLevel 1 . futharkPrimitiveToHaskellType . tyArrayElemType
 
-arrayNewCall :: Type -> [Text]
-arrayNewCall ty =
+arrayNewCall :: Text -> Type -> [Text]
+arrayNewCall haskellTy ty =
   let futName     = arrayNew . tyArrayOps $ ty
       arrayType   = primPointer ty
       shapeParams = replicate (tyArrayRank ty) "Int64"
-      returnType  = pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      returnType  = pointerLevel 1 haskellTy
   in  foreignImportCall futName (arrayType:shapeParams) returnType
 
-arrayFreeCall :: Type -> [Text]
-arrayFreeCall ty =
+arrayFreeCall :: Text -> Type -> [Text]
+arrayFreeCall haskellTy ty =
   let futName     = arrayFree . tyArrayOps $ ty
-      inputType   = pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      inputType   = pointerLevel 1 haskellTy
       returnType  = "Int"
   in  foreignImportCall futName [inputType] returnType
 
-arrayValuesCall :: Type -> [Text]
-arrayValuesCall ty =
+arrayValuesCall :: Text -> Type -> [Text]
+arrayValuesCall haskellTy ty =
   let futName     = arrayValues . tyArrayOps $ ty
-      inputType   = pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      inputType   = pointerLevel 1 haskellTy
       outputType  = primPointer ty
       returnType  = "Int"
   in  foreignImportCall futName [inputType, outputType] returnType
 
-arrayShapeCall :: Type -> [Text]
-arrayShapeCall ty =
+arrayShapeCall :: Text -> Type -> [Text]
+arrayShapeCall haskellTy ty =
   let futName     = arrayShape . tyArrayOps $ ty
-      inputTypes  = pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      inputTypes  = pointerLevel 1 haskellTy
       returnType  = pointerLevel 1 "Int64"
   in  foreignImportCall futName [inputTypes] returnType
 
-opaqueFreeCall    :: Type -> [Text]
-opaqueFreeCall    ty =
+opaqueFreeCall :: Text -> Type -> [Text]
+opaqueFreeCall haskellTy ty =
   let futName    = opaqueFree . tyOpaqueOps $ ty
-      inputTypes = [ pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      inputTypes = [ pointerLevel 1 haskellTy
                    ]
       returnType = "Int"
   in  foreignImportCall futName inputTypes returnType
 
-opaqueStoreCall   :: Type -> [Text]
-opaqueStoreCall   ty =
+opaqueStoreCall :: Text -> Type -> [Text]
+opaqueStoreCall haskellTy ty =
   let futName    = opaqueStore . tyOpaqueOps $ ty
-      inputTypes = [ pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      inputTypes = [ pointerLevel 1 haskellTy
                    , pointerLevel 2 "()"
                    , pointerLevel 1 "CSize"
                    ]
       returnType = "Int"
   in  foreignImportCall futName inputTypes returnType
 
-opaqueRestoreCall :: Type -> [Text]
-opaqueRestoreCall ty =
+opaqueRestoreCall :: Text -> Type -> [Text]
+opaqueRestoreCall haskellTy ty =
   let futName    = opaqueRestore . tyOpaqueOps $ ty
       inputTypes = [pointerLevel 1 "()"]
-      returnType = pointerLevel 1 $ foreignTypeToHaskell Raw ty
+      returnType = pointerLevel 1 haskellTy
   in  foreignImportCall futName inputTypes returnType
 
-foreignTypeDeclarations :: Text -> Type -> [Text]
-foreignTypeDeclarations futTypeName ty =
-    foreignDataDeclaration ty
+foreignTypeDeclarations :: Manifest -> Text -> Type -> [Text]
+foreignTypeDeclarations manifest key ty =
+    let haskellTy = typeToHaskell manifest Raw key
+    in
+    foreignDataDeclaration haskellTy
     <>
     case ty of
       TypeArray {} ->
-           arrayNewCall      ty
-        <> arrayFreeCall     ty
-        <> arrayValuesCall   ty
-        <> arrayShapeCall    ty
+           arrayNewCall      haskellTy ty
+        <> arrayFreeCall     haskellTy ty
+        <> arrayValuesCall   haskellTy ty
+        <> arrayShapeCall    haskellTy ty
       TypeOpaque {} ->
-           opaqueFreeCall    ty
-        <> opaqueStoreCall   ty
-        <> opaqueRestoreCall ty
+           opaqueFreeCall    haskellTy ty
+        <> opaqueStoreCall   haskellTy ty
+        <> opaqueRestoreCall haskellTy ty
 
 foreignEntryDeclaration :: Manifest -> Text -> EntryPoint -> [Text]
 foreignEntryDeclaration manifest _futEntryName entry =
     let futName     = entryPointCFun entry
-        outputTypes = map (capitalize . typeToHaskell manifest Raw 1 2 . outputType) $ entryPointOutputs entry
-        inputTypes  = map (capitalize . typeToHaskell manifest Raw 0 1 . inputType ) $ entryPointInputs entry
+        outputTypes = map (capitalize . typeToHaskellPointer manifest Raw 1 2 . outputType) $ entryPointOutputs entry
+        inputTypes  = map (capitalize . typeToHaskellPointer manifest Raw 0 1 . inputType ) $ entryPointInputs entry
         params      = outputTypes <> inputTypes
     in  foreignImportCall futName params "Int"
 
@@ -223,12 +187,12 @@ rawImportString :: Manifest -> [Text]
 rawImportString manifest =
   concatMap (uncurry (foreignEntryDeclaration manifest)) (M.assocs $ manifestEntryPoints manifest)
   ++
-  concatMap (uncurry foreignTypeDeclarations) (M.assocs $ manifestTypes manifest)
+  concatMap (uncurry (foreignTypeDeclarations manifest)) (M.assocs $ manifestTypes manifest)
 
-instanceDeclarations :: Type -> [Text]
-instanceDeclarations ty =
-  let rawName =capitalize $ tr "raw" $ foreignTypeToHaskell Raw ty
-      apiName = tr "api" $ foreignTypeToHaskell Api ty
+instanceDeclarations :: Manifest -> Text -> Type -> [Text]
+instanceDeclarations manifest key ty =
+  let rawName = capitalize $ typeToHaskell manifest Raw key
+      apiName = typeToHaskell manifest Api key
       constructorName = capitalize apiName
       dimStr = T.pack . show $ dim
       element = futharkPrimitiveToHaskellType $ tyArrayElemType ty
@@ -259,7 +223,7 @@ declareArray apiName constructorName rawName dimStr element =
   ]
 
 instanceDeclarationLines :: Manifest -> [Text]
-instanceDeclarationLines manifest = concatMap instanceDeclarations $ M.elems (manifestTypes manifest)
+instanceDeclarationLines manifest = concatMap (uncurry (instanceDeclarations manifest)) $ M.assocs (manifestTypes manifest)
 
 indentTail a b = mapTail (a<>) (b<>)
 
@@ -287,8 +251,8 @@ mightTuple ls =
 arrowBefore :: Text -> Text
 arrowBefore x = "  -> " <> x
 
-entryCall :: Manifest -> EntryPoint -> [Text]
-entryCall manifest entryPoint =
+entryCall :: Manifest -> Text -> EntryPoint -> [Text]
+entryCall manifest entryName entryPoint =
          typeDeclaration
       ++ input
       ++ map arrowBefore (   preCall
@@ -297,8 +261,7 @@ entryCall manifest entryPoint =
       ++ postCall
       ++ [""]
     where
-        apiName = dropFuthark (entryPointCFun entryPoint)
-        entryName = dropEntry apiName
+        apiName = "entry_" <> entryName
         isForeignI a = isJust $ M.lookup (inputType  a) (manifestTypes manifest)
         isForeignO a = isJust $ M.lookup (outputType a) (manifestTypes manifest)
         inArgs   = entryPointInputs  entryPoint
@@ -307,8 +270,8 @@ entryCall manifest entryPoint =
         inArgNames  = map inputName  inArgs
         outArgTys   = map outputType outArgs
         outArgNames = map (("out"<>) . T.pack . show) [0..length outArgTys-1]
-        inputHaskTypes  = map (capitalize . typeToHaskell manifest Api 0 0 . inputType) inArgs
-        outputHaskTypes = map (capitalize . typeToHaskell manifest Api 0 0 . outputType) outArgs
+        inputHaskTypes  = map (capitalize . typeToHaskellPointer manifest Api 0 0 . inputType ) inArgs
+        outputHaskTypes = map (capitalize . typeToHaskellPointer manifest Api 0 0 . outputType) outArgs
         foreignInputs = filter isForeignI inArgs
         typeDeclaration = [entryName] ++
                           (typeWithConstraints ["Monad m"] $
@@ -332,4 +295,40 @@ entryCall manifest entryPoint =
                    else [peek (head outArgs) <> head outArgNames]
 
 entryCallLines :: Manifest -> [Text]
-entryCallLines manifest = concat . map (entryCall manifest) $ M.elems . manifestEntryPoints $ manifest
+entryCallLines manifest = concat . map (uncurry (entryCall manifest)) $ M.assocs . manifestEntryPoints $ manifest
+
+
+{-
+
+startsWith parts n = take (length parts) n == parts
+
+isStruct :: [Text] -> Bool
+isStruct = startsWith ["struct"]
+
+
+dropEntry       = dropText "entry_"
+fromPointer     = T.dropWhile (/='*')
+beforePointer   = T.takeWhile (/='*')
+withoutConst    = dropWhile (=="const")
+withoutUnsigned = dropWhile (=="unsigned")
+
+  let ts = withoutUnsigned $ withoutConst $ T.words $ simple
+  in  if isStruct ts
+      then let part = ts !! 1
+               cropPart = case src of
+                             Raw -> part
+                             Api -> dropFuthark part
+           in  cropPart
+      else futharkPrimitiveToHaskellType (head ts)
+
+lookupType :: Manifest -> T.Text -> Either Type T.Text
+lookupType manifest text =
+  case manifestTypes manifest !? text of
+    Nothing -> Right text
+    Just ty -> Left  ty
+
+foreignTypeToHaskell :: Manifest -> NameSource -> Text -> Type -> Text
+foreignTypeToHaskell manifest src key ty =
+
+
+-}

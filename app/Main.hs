@@ -10,7 +10,6 @@ import qualified Data.Text as T
 import CodeBodies
 import Conversion
 import Headers
-import ReadHeader
 import Manifest
 import Type
 
@@ -24,16 +23,15 @@ main :: IO ()
 main = do
     putStrLn "futhask version 0.2.1"
     args <- getArgs
-    [ backendS, headerName, srcDir, moduleName ] <- getArgs >>= \args -> case args of
+    [ backendS, jsonName, srcDir, moduleName ] <- getArgs >>= \args -> case args of
          [a, b, c, d] -> return args
-         _            -> error "futhask takes four arguments:\n - backend (c, opencl, cuda)\n - Futhark header file\n - Haskell source directory\n - module name"
+         _            -> error "futhask takes four arguments:\n - backend (c, opencl, cuda)\n - Futhark JSON file\n - Haskell source directory\n - module name"
     backend <- case backendS of
         "c"      -> return C
         "opencl" -> return OpenCL
         "cuda"   -> return Cuda
         _        -> error $ "unknown backend: " ++ backendS ++ "\n  available backends: c, opencl, cuda"
-    header   <- readHeader   (headerName ++ ".h"   )
-    manifest <- readManifest (headerName ++ ".json")
+    manifest <- readManifest jsonName
     -- putStrLn $ show header
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     mapM_ (writeModule backend srcDir moduleName)
