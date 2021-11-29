@@ -51,6 +51,7 @@ pointerLevel i a =
   then "Ptr " <> wrapIfNotOneWord (pointerLevel (i-1) a)
   else a
 
+data WithSkolem = WithSkolem | NoSkolem
 data NameSource = Raw | Api
 
 futharkPrimitiveToHaskellType :: Text -> Text
@@ -59,15 +60,15 @@ futharkPrimitiveToHaskellType primitive =
     Just  s -> s
     Nothing -> error $ "type \'" ++ T.unpack primitive ++ "\' not found."
 
-buildArrayType :: Text -> Int -> Text
-buildArrayType elemType rank =
-  elemType <> "_" <> (T.pack $ show rank) <> "d"
-
-typeToHaskellPointer :: Manifest -> NameSource -> Int -> Int -> Text -> Text
-typeToHaskellPointer manifest src primLevel arrayLevel key =
-  let ty       = manifestTypes manifest ! key
-      elemType = tyArrayElemType ty
+buildArrayType :: Type -> Text
+buildArrayType ty =
+  let elemType = tyArrayElemType ty
       rank     = tyArrayRank     ty
+  in  elemType <> "_" <> (T.pack $ show rank) <> "d"
+
+typeToHaskellPointer :: Manifest -> WithSkolem -> NameSource -> Int -> Int -> Text -> Text
+typeToHaskellPointer manifest skolem src primLevel arrayLevel key =
+  let ty       = manifestTypes manifest ! key
       mPrim    = lookup key primTable
       level    = case mPrim of
                    Just {} -> primLevel
@@ -75,92 +76,95 @@ typeToHaskellPointer manifest src primLevel arrayLevel key =
       prefix   = case src of
                    Raw -> "futark_"
                    Api -> ""
+      suffix   = case skolem of
+                   NoSkolem   -> ""
+                   WithSkolem -> " c"
   in pointerLevel level $
      case mPrim of
         Just prim -> prim
         Nothing   ->
           case ty of
-            TypeArray  {} -> prefix <> buildArrayType elemType rank
-            TypeOpaque {} -> prefix <> "opaque_" <> key
+            TypeArray  {} -> prefix <> buildArrayType ty <> suffix
+            TypeOpaque {} -> prefix <> "opaque_" <> key  <> suffix
 
-typeToHaskell :: Manifest -> NameSource -> Text -> Text
-typeToHaskell manifest src key =
-  typeToHaskellPointer manifest src 0 0 key
+typeToHaskell :: Manifest -> WithSkolem -> NameSource -> Text -> Text
+typeToHaskell manifest skol src key =
+  typeToHaskellPointer manifest skol src 0 0 key
 
 foreignDataDeclaration :: Text -> [Text]
 foreignDataDeclaration haskellTy =
-    ["data " <> capitalize haskellTy]
+    ["data " <> capitalize haskellTy ]
 
 foreignImportCall :: Text -> [Text] -> Text -> [Text]
-foreignImportCall futName params ret =
+foreignImportCall arrName params ret =
     let ctx       = pointerLevel 1 "Futhark_context"
     in
-    [ "foreign import ccall unsafe \"" <> futName <> "\""
-    , "  " <> dropFuthark futName
+    [ "foreign import ccall unsafe \"futhark_" <> arrName <> "\""
+    , "  " <> arrName
     ]
-    ++ mapTail ("    :: " <>) ("    -> " <>)
+    ++ indentTail "    :: " "    -> "
        (ctx:params <> ["IO " <> wrapIfNotOneWord ret])
 
 primPointer = pointerLevel 1 . futharkPrimitiveToHaskellType . tyArrayElemType
 
 arrayNewCall :: Text -> Type -> [Text]
 arrayNewCall haskellTy ty =
-  let futName     = arrayNew . tyArrayOps $ ty
+  let arrName     = "new_" <> buildArrayType ty
       arrayType   = primPointer ty
       shapeParams = replicate (tyArrayRank ty) "Int64"
       returnType  = pointerLevel 1 haskellTy
-  in  foreignImportCall futName (arrayType:shapeParams) returnType
+  in  foreignImportCall arrName (arrayType:shapeParams) returnType
 
 arrayFreeCall :: Text -> Type -> [Text]
 arrayFreeCall haskellTy ty =
-  let futName     = arrayFree . tyArrayOps $ ty
+  let arrName     = "free_" <> buildArrayType ty
       inputType   = pointerLevel 1 haskellTy
       returnType  = "Int"
-  in  foreignImportCall futName [inputType] returnType
+  in  foreignImportCall arrName [inputType] returnType
 
 arrayValuesCall :: Text -> Type -> [Text]
 arrayValuesCall haskellTy ty =
-  let futName     = arrayValues . tyArrayOps $ ty
+  let arrName     = "values_" <> buildArrayType ty
       inputType   = pointerLevel 1 haskellTy
       outputType  = primPointer ty
       returnType  = "Int"
-  in  foreignImportCall futName [inputType, outputType] returnType
+  in  foreignImportCall arrName [inputType, outputType] returnType
 
 arrayShapeCall :: Text -> Type -> [Text]
 arrayShapeCall haskellTy ty =
-  let futName     = arrayShape . tyArrayOps $ ty
+  let arrName     = "shape_" <> buildArrayType ty
       inputTypes  = pointerLevel 1 haskellTy
       returnType  = pointerLevel 1 "Int64"
-  in  foreignImportCall futName [inputTypes] returnType
+  in  foreignImportCall arrName [inputTypes] returnType
 
 opaqueFreeCall :: Text -> Type -> [Text]
 opaqueFreeCall haskellTy ty =
-  let futName    = opaqueFree . tyOpaqueOps $ ty
+  let arrName    = dropFuthark . opaqueFree . tyOpaqueOps $ ty
       inputTypes = [ pointerLevel 1 haskellTy
                    ]
       returnType = "Int"
-  in  foreignImportCall futName inputTypes returnType
+  in  foreignImportCall arrName inputTypes returnType
 
 opaqueStoreCall :: Text -> Type -> [Text]
 opaqueStoreCall haskellTy ty =
-  let futName    = opaqueStore . tyOpaqueOps $ ty
+  let arrName    = dropFuthark . opaqueStore . tyOpaqueOps $ ty
       inputTypes = [ pointerLevel 1 haskellTy
                    , pointerLevel 2 "()"
                    , pointerLevel 1 "CSize"
                    ]
       returnType = "Int"
-  in  foreignImportCall futName inputTypes returnType
+  in  foreignImportCall arrName inputTypes returnType
 
 opaqueRestoreCall :: Text -> Type -> [Text]
 opaqueRestoreCall haskellTy ty =
-  let futName    = opaqueRestore . tyOpaqueOps $ ty
+  let arrName    = dropFuthark . opaqueRestore . tyOpaqueOps $ ty
       inputTypes = [pointerLevel 1 "()"]
       returnType = pointerLevel 1 haskellTy
-  in  foreignImportCall futName inputTypes returnType
+  in  foreignImportCall arrName inputTypes returnType
 
 foreignTypeDeclarations :: Manifest -> Text -> Type -> [Text]
 foreignTypeDeclarations manifest key ty =
-    let haskellTy = typeToHaskell manifest Raw key
+    let haskellTy = typeToHaskell manifest NoSkolem Raw key
     in
     foreignDataDeclaration haskellTy
     <>
@@ -177,11 +181,11 @@ foreignTypeDeclarations manifest key ty =
 
 foreignEntryDeclaration :: Manifest -> Text -> EntryPoint -> [Text]
 foreignEntryDeclaration manifest _futEntryName entry =
-    let futName     = entryPointCFun entry
-        outputTypes = map (capitalize . typeToHaskellPointer manifest Raw 1 2 . outputType) $ entryPointOutputs entry
-        inputTypes  = map (capitalize . typeToHaskellPointer manifest Raw 0 1 . inputType ) $ entryPointInputs entry
+    let arrName     = dropFuthark $ entryPointCFun entry
+        outputTypes = map (capitalize . typeToHaskellPointer manifest NoSkolem Raw 1 2 . outputType) $ entryPointOutputs entry
+        inputTypes  = map (capitalize . typeToHaskellPointer manifest NoSkolem Raw 0 1 . inputType ) $ entryPointInputs entry
         params      = outputTypes <> inputTypes
-    in  foreignImportCall futName params "Int"
+    in  foreignImportCall arrName params "Int"
 
 rawImportString :: Manifest -> [Text]
 rawImportString manifest =
@@ -191,8 +195,8 @@ rawImportString manifest =
 
 instanceDeclarations :: Manifest -> Text -> Type -> [Text]
 instanceDeclarations manifest key ty =
-  let rawName = capitalize $ typeToHaskell manifest Raw key
-      apiName = typeToHaskell manifest Api key
+  let rawName = capitalize $ typeToHaskell manifest NoSkolem Raw key
+      apiName = typeToHaskell manifest NoSkolem Api key
       constructorName = capitalize apiName
       dimStr = T.pack . show $ dim
       element = futharkPrimitiveToHaskellType $ tyArrayElemType ty
@@ -207,7 +211,7 @@ instanceDeclarations manifest key ty =
 
 declareObject :: Text -> Text -> Text -> [Text]
 declareObject apiName constructorName rawName =
-  [ "data " <> constructorName <> {-" c"-} " = " <> constructorName <> " (MV.MVar Int) (F.ForeignPtr Raw." <> rawName <> ")"
+  [ "data " <> constructorName <> " c = " <> constructorName <> " (MV.MVar Int) (F.ForeignPtr Raw." <> rawName <> ")"
   , "instance FutharkObject " <> constructorName <> " Raw." <> rawName <> " where"
   , "  wrapFO = " <> constructorName
   , "  freeFO = Raw.free_" <> apiName
@@ -245,7 +249,7 @@ typeWithConstraints constraintLines typeLines =
 mightTuple :: [Text] -> Text
 mightTuple ls =
   if length ls <= 1
-  then T.concat ls
+  then wrapIfNotOneWord $ T.concat ls
   else "(" <> T.intercalate ", " ls <> ")"
 
 arrowBefore :: Text -> Text
@@ -270,13 +274,13 @@ entryCall manifest entryName entryPoint =
         inArgNames  = map inputName  inArgs
         outArgTys   = map outputType outArgs
         outArgNames = map (("out"<>) . T.pack . show) [0..length outArgTys-1]
-        inputHaskTypes  = map (capitalize . typeToHaskellPointer manifest Api 0 0 . inputType ) inArgs
-        outputHaskTypes = map (capitalize . typeToHaskellPointer manifest Api 0 0 . outputType) outArgs
+        inputHaskTypes  = map (capitalize . typeToHaskellPointer manifest WithSkolem Api 0 0 . inputType ) inArgs
+        outputHaskTypes = map (capitalize . typeToHaskellPointer manifest WithSkolem Api 0 0 . outputType) outArgs
         foreignInputs = filter isForeignI inArgs
         typeDeclaration = [entryName] ++
                           (typeWithConstraints ["Monad m"] $
                               inputHaskTypes
-                              ++ ["FutT m " <> mightTuple outputHaskTypes
+                              ++ ["FutT c m " <> mightTuple outputHaskTypes
                                  ]
                           )
         input = [ T.unwords (entryName : map inputName inArgs)
