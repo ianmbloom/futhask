@@ -21,7 +21,6 @@ where
 
 import Data.Aeson (ToJSON (..), object)
 import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Key as JSON
 import Data.Aeson ( Object(..)
                   , Value(..)
                   , pattern Object
