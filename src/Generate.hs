@@ -8,179 +8,203 @@ import Data.Maybe (fromJust)
 import Data.Char (toUpper)
 import qualified Data.Text as T
 import Data.Text (Text(..))
-import Data.String (IsString(..))
+
 
 import GHC.SourceGen
 import GHC.Paths (libdir)
 import GHC (runGhc, getSessionDynFlags)
+import GHC.Utils.Outputable(Outputable(..))
 
 import qualified Data.Map as M
 import Manifest
 
 import Name
+import Type
 
-encodeGHC :: [HsDecl'] -> IO String
+malloc             :: HsExpr'
+withFO             :: HsExpr'
+peekFree           :: HsExpr'
+peekFreeWrapIn     :: HsExpr'
+inContextWithError :: HsExpr'
+malloc             = var $ qual "F" "malloc"
+withFO             = var (qual "T" "withFO")
+peekFree           = var (qual "U" "peekFree"          )
+peekFreeWrapIn     = var (qual "U" "peekFreeWrapIn"    ) @@ var "context"
+inContextWithError = var (qual "C" "inContextWithError")
+futT               :: HsType'
+c                  :: HsType'
+m                  :: HsType'
+futT               = var "FutT"
+c                  = var "c"
+m                  = var "m"
+return' :: HsExpr'
+return'            = var "return"
+
+append :: [a] -> a -> [a]
+append xs y = xs ++ [y]
+
+mightTuple :: HasTuple a => [a] -> a
+mightTuple as =
+  if length as > 1
+  then tuple as
+  else head as
+
+ptr :: HsType' -> HsType'
+ptr a = (bvar "Ptr") @@ a
+
+ptrs :: Int -> HsType' -> HsType'
+ptrs i a =
+  if i > 0
+  then ptr (ptrs (i-1) a)
+  else a
+
+encodeGHC :: Outputable a => a ->  IO String
 encodeGHC x = runGhc (Just libdir) $ do
    dynFlags <- getSessionDynFlags
    return $ showPpr dynFlags x
 
-wrapIfNotOneWord :: Text -> Text
-wrapIfNotOneWord s = if length (T.words s) > 1 then "(" <> s <> ")" else s
+foreignDataDeclaration :: FutharkType -> HsDecl'
+foreignDataDeclaration ty =
+    data' (typeRawName ty) [] [] []
 
-mapTail :: (a->a) -> (a->a) -> [a] -> [a]
-mapTail g f (a:as) = g a:map f as
-mapTail g f []     = []
+dataDeclaration :: FutharkType -> HsDecl'
+dataDeclaration ty =
+   data' (constructorName $ ty) [bvar "c"]
+         [prefixCon (constructorName $ ty)
+            [ field (var (qual "MV" "MVar") @@ var "Int")
+            , field (var (qual "F" "ForeignPtr") @@ var (qual "Raw" (typeRawName ty)))
+            ]
+         ] []
 
-indentTail :: Text -> Text -> [Text] -> [Text]
-indentTail a b = mapTail (a<>) (b<>)
 
-pointerLevel :: Int -> Text -> Text
-pointerLevel i a =
-  if i > 0
-  then "Ptr " <> wrapIfNotOneWord (pointerLevel (i-1) a)
-  else a
-
-inTupleMore :: [Text] -> [Text]
-inTupleMore ls =
-  if length ls > 1
-  then indentTail "( " ", " ls <> [")"]
-  else ls
-
-makeConstraints :: [Text] -> [Text]
-makeConstraints = inTupleMore
-
-typeWithConstraints :: [Text] -> [Text] -> [Text]
-typeWithConstraints constraintLines typeLines =
-  if length constraintLines > 0
-  then    indentTail " :: " "    " constraintLines
-       <> indentTail " => " " -> " typeLines
-  else    indentTail " :: " " -> " typeLines
-
-mightTuple :: [Text] -> Text
-mightTuple ls =
-  if length ls <= 1
-  then wrapIfNotOneWord $ T.concat ls
-  else "(" <> T.intercalate ", " ls <> ")"
-
-arrowBefore :: Text -> Text
-arrowBefore x = "  -> " <> x
-
-withSkolem :: (Text -> Text) -> Text -> Text
-withSkolem f key =
-  let suffix =
-        case maybePrim key of
-          Just prim -> ""
-          Nothing   -> " c"
-  in  f key <> suffix
-
-foreignDataDeclaration :: Text -> [Text]
-foreignDataDeclaration haskellTy =
-    ["data " <> capitalize haskellTy ]
-
-foreignImportCall :: Text -> Text ->[Text] -> Text -> [Text]
-foreignImportCall arrName callName params ret =
-    let ctx       = pointerLevel 1 "Futhark_context"
+foreignImportCall :: String -> String -> [HsType'] -> HsType' -> HsExpr'
+foreignImportCall haskCallName cCallName params ret =
+    let ctx       = ptr (var "Futhark_context")
     in
-    [ "foreign import ccall unsafe \"futhark_" <> callName <> "\""
-    , "  " <> arrName
-    ]
-    ++ indentTail "    :: " "    -> "
-       (ctx:params <> ["IO " <> wrapIfNotOneWord ret])
+       (    var "foreign"
+         @@ var "import"
+         @@ var "ccall"
+         @@ var "unsafe"
+         @@ string cCallName
+         @@ (var . up $ haskCallName)
+      )
+      @::@
+      foldr1 (-->) (ctx:params <> [var "IO" @@ ret])
 
--- declareObject :: Text -> Text -> Text -> [Text]
--- declareObject apiName constructorName rawName =
---   [ "data " <> constructorName <> " c = " <> constructorName <> " (MV.MVar Int) (F.ForeignPtr Raw." <> rawName <> ")"
---   , "instance FutharkObject " <> constructorName <> " Raw." <> rawName <> " where"
---   , "  wrapFO = " <> constructorName
---   , "  freeFO = Raw.free_" <> apiName
---   , "  fromFO (" <> constructorName <> " rc fp) = (rc, fp)"
---   ]
-
-declareObject :: Text -> Text -> Text -> [Text]
+declareObject :: String -> String -> String -> HsDecl'
 declareObject apiName constructorName rawName =
-  let qualifiedRaw     = "Raw." <> rawName
-      qualifiedRawFree = "Raw.free_" <> apiName
+  let con         = up $ constructorName
+      qualRaw     = up $ "Raw." <> rawName
+      qualRawFree = up $ "Raw.free_" <> apiName
   in
-    instance' (var "FutharkObject" @@ var constructorName @@ var qualifiedRaw)
-      [ funBind "wrapFO" $ match [] $ conP constructorName  []
-      , funBind "freeFO" $ match [] $ conP qualifiedRawFree []
-      , funBind "fromFO" $ match [conP constructorName [var "rc", var "fp"]] $ tuple [var "rc", var "fp"]
+    instance' (var "FutharkObject" @@ var con @@ var qualRaw)
+      [ funBind "wrapFO" $ match [] $ var con
+      , funBind "freeFO" $ match [] $ var qualRawFree
+      , funBind "fromFO" $ match [conP con [bvar "rc", bvar "fp"]] $ tuple [var "rc", var "fp"]
       ]
 
--- declareArray :: Text -> Text -> Text -> Text -> Text -> [Text]
--- declareArray apiName constructorName rawName dimStr element =
---   [ "instance FutharkArray " <> constructorName <> " Raw." <> rawName <> " M.Ix" <> dimStr <> " " <> element <> " where"
---   , "  shapeFA  = to" <> dimStr <> "d Raw.shape_" <> apiName
---   , "  newFA    = from" <> dimStr <> "d Raw.new_" <> apiName
---   , "  valuesFA = Raw.values_" <> apiName
---   ]
-
-declareArray :: Text -> Text -> Text -> Text -> Text -> [Text]
-declareArray apiName constructorName rawName dimStr element =
-  let qualifiedRaw       = "Raw."       <> rawName
-      qualifiedRawShape  = "Raw.shape_" <> apiName
-      qualifiedRawNew    = "Raw.new_"   <> apiName
-      qualifiedRawValues = "Raw.new_"   <> apiName
-      dim     = "M.Ix" <> dimStr
-      toFun   = "to"   <> dimStr <> "d"
-      fromFun = "from" <> dimStr <> "d"
-  in  instance' (var "FutharkArray" @@ var constructorName @@ var qualifiedRaw @@ var dim @@ var element)
-        [ funBind "shapeFA"  (match []) $ toFun   @@ qualifiedRawShape
-        , funBind "newFA"    (match []) $ fromFun @@ qualifiedRawNew
-        , funBind "valuesFA" (match []) $ qualifiedRawValues
+declareArray :: String -> String -> String -> Int -> String -> HsDecl'
+declareArray apiName constructorName rawName dim element =
+  let con           = var .            up $ constructorName
+      elt           = var .            up $ element
+      qualRaw       = var . qual raw . up $             rawName
+      qualRawShape  = var . qual raw . up $ "shape_" <> apiName
+      qualRawNew    = var . qual raw . up $ "new_"   <> apiName
+      qualRawValues = var . qual raw . up $ "values_"<> apiName
+      dimVar        = var .            up $ "M.Ix"   <> show dim
+      toFun         = var .            up $ "to"     <> show dim <> "d"
+      fromFun       = var .            up $ "from"   <> show dim <> "d"
+  in  instance' (var "FutharkArray" @@ con @@ qualRaw @@ dimVar @@ elt)
+        [ funBind "shapeFA"  $ match [] $ toFun   @@ qualRawShape
+        , funBind "newFA"    $ match [] $ fromFun @@ qualRawNew
+        , funBind "valuesFA" $ match [] $ qualRawValues
         ]
 
-entryCall :: Manifest -> Text -> [Text]
-entryCall manifest entryName =
-         [ typeDeclaration
-         , preCall (call postCall)
-         ]
-    where
-        entryPoint = lookupEntry manifest entryName
-        apiName = "entry_" <> entryName
-        isForeignI a = isJust $ M.lookup (inputType  a) (manifestTypes manifest)
-        isForeignO a = isJust $ M.lookup (outputType a) (manifestTypes manifest)
-        inArgs   = entryPointInputs  entryPoint
-        outArgs  = entryPointOutputs entryPoint
-        inArgTys    = map inputType  inArgs
-        inArgNames  = map inputName  inArgs
-        outArgTys   = map outputType outArgs
-        outArgNames = map (("out"<>) . T.pack . show) [0..length outArgTys-1]
-        inputHaskTypes  = map (withSkolem (capitalize . typeToHaskell manifest) . inputType ) inArgs
-        outputHaskTypes = map (withSkolem (capitalize . typeToHaskell manifest) . outputType) outArgs
-        foreignInputs = map inputName $ filter isForeignI inArgs
+declareEntry :: FutharkEntry -> [HsDecl']
+declareEntry entry =
+  [ typeDeclaration
+  , funcDeclaration
+  ]
+  where
+    inParams  :: [FutharkParameter]
+    inParams  = futEntryInParams  entry
+    outParams :: [FutharkParameter]
+    outParams = futEntryOutParams entry
+    lambdaWithFO :: FutharkParameter -> HsExpr' -> HsExpr'
+    lambdaWithFO param body =
+      if isPrim . pType $ param
+      then body
+      else op (withFO @@ (var . up $ pName param)) "$" (lambda [bvar . up . prime . pName $ param] body)
+    fOLayers = map lambdaWithFO inParams
+    inLayers :: [([PName] -> [PName] -> ([Stmt'],[Stmt'])) ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])]
+    inLayers  = map layerIn inParams
+    outLayers :: [([PName] -> [PName] -> ([Stmt'],[Stmt'])) ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])]
+    outLayers = map layerOut outParams
+    layers :: [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layers = foldl (flip ($)) (foldl (flip ($)) body outLayers) inLayers
+    (call, postCall) = layers [] []
+    entryName :: OccNameStr
+    entryName = entryApiName entry
+    outType :: FutharkParameter -> HsType'
+    outType ty = (mightApplySkolem constructorName . pType $ ty)
+    typeDeclaration :: HsDecl'
+    typeDeclaration =   typeSig entryName
+                    $   [var "Monad" @@ var "m"]
+                    ==> foldr1 (-->) (map outType inParams ++
+                        [futT @@ c @@ m @@ mightTuple (map outType outParams)])
+    funcDeclaration :: HsDecl'
+    funcDeclaration = funBind entryName . match (map (bvar . up . pName) inParams) $
+                          op (var $ qual "Fut" "unsafeLiftFromIO") "$" $
+                          lambda [bvar "context"] $
+                          foldr ($)
+                          (do' (call ++ postCall)) fOLayers
+    applyEntry :: [PName] -> [PName] -> Stmt'
+    applyEntry ins outs = stmt $
+                     inContextWithError @@ var "context" @@ lambda [bvar . up . prime $ "context"]
+                     (foldl1 (@@) $
+                         [var (entryQualRawName entry), var . up . prime $ "context"]
+                         ++ map (var . up) outs
+                         ++ map (var . up) ins
+                         )
+    returnOut :: [PName] -> Stmt'
+    returnOut outs = stmt $
+                     return' @@ (mightTuple $ (map (bvar . up . prime) outs :: [HsExpr']))
+    body :: [PName] -> [PName] -> ([Stmt'], [Stmt'])
+    body ins outs = ([applyEntry ins outs], [returnOut outs])
+    layerIn :: FutharkParameter
+            -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
+            ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerIn param =
+      if isPrim (pType param)
+      then layerPrimitive  (pName param)
+      else layerForeignPtr (pName param)
+    layerPrimitive :: PName
+                   -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
+                   ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerPrimitive name body inVars outVars =
+        body (name:inVars) outVars
+    layerForeignPtr :: PName
+                    -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
+                    ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerForeignPtr name body inVars outVars =
+        let ( retInBody, retOutBody) = body (prime name:inVars) outVars
+        in  ( retInBody
+            , retOutBody
+            )
+    layerOut :: FutharkParameter
+            -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
+            ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerOut param =
+      let wrapIn = not . isPrim . pType $ param
+      in  layerMalloc wrapIn (pName param)
 
---
---         typeDeclaration = [entryName] ++
---                           (typeWithConstraints ["Monad m"] $
---                               inputHaskTypes
---                               ++ ["FutT c m " <> mightTuple outputHaskTypes
---                                  ]
---                           )
---         input = [ T.unwords (entryName : inArgNames)
---                 , "  =  Fut.unsafeLiftFromIO $ \\context"
---                 ]
---         preCall =  (map (\i -> "T.withFO " <> i <> " $ \\" <> i <> "'") foreignInputs)
---                 ++ (map (\o -> "F.malloc >>= \\" <> o) outArgNames)
---         call = [ "C.inContextWithError context (\\context'"
---                , "Raw." <> apiName <> " context' " <> T.unwords (outArgNames <> (map (\i -> inputName i <> if isForeignI i then "'" else "") inArgs)) <> ")"
---                ]
---         peek o = if isForeignO o then "U.peekFreeWrapIn context " else "U.peekFree "
---         postCall = indentTail "  >> " "  -> " $
---                    if length outArgs > 1
---                    then  zipWith (\o name -> peek o <> name <> " >>= \\" <> name <> "'") outArgs outArgNames
---                          ++ ["return " <> mightTuple (map (\o -> o <> "'") outArgNames)]
---                    else [peek (head outArgs) <> head outArgNames]
---
-
-        prime i = i <> "'"
-        typeDeclaration = typeSig entryName
-                        $ var "Monad" @@ var "m"
-                        ==> foldl1 (--->) (map var inputHaskTypes)
-                        --> var "FutT" @@ var c @@ var m @@ tuple (map var outputHaskTypes)
-        params = map var inArgNames
-        mkPrecallIn  i body = lambda (var i) $ var "T.withFO" @@ var i @@ (lambda (var $ prime i) body)
-        mkPrecallOut o body = lambda (var o) $ op (var "F.malloc") ">>=" (lambda (var o) body)
-        preCall body = foldl mkPreCallIn (foldl mkPreCallOut body foreignInputs) outArgNames
-        call = undefined
-        postCall = undefined
+    layerMalloc :: Bool
+                -> PName
+                -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
+                ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerMalloc wrapIn name body inVars outVars =
+        let (retInBody, retOutBody)  = body inVars (name:outVars)
+            peekF = if wrapIn then peekFreeWrapIn else peekFree
+        in  ( [(bvar . up         $ name) <-- malloc] ++ retInBody
+            , [(bvar . up . prime $ name) <-- peekF @@ (var . up $ name)] ++ retOutBody
+            )

@@ -9,6 +9,10 @@ import Data.List (intercalate, partition, lookup)
 import Data.Char (toUpper)
 import qualified Data.Text as T
 import Data.Text (Text(..))
+import Data.String (IsString(..))
+
+import Type
+import GHC.SourceGen
 
 primTable :: [(Text, Text)]
 primTable =
@@ -28,11 +32,48 @@ primTable =
 maybePrim :: Text -> Maybe Text
 maybePrim key = lookup key primTable
 
-fromRaw :: (Text -> Text) -> Text -> Text
-fromRaw f key =
-  case maybePrim key of
-    Just prim -> f key
-    Nothing   -> "futark_" <> f key
+futharkPrefix :: (FutharkType -> String) -> FutharkType -> String
+futharkPrefix f ty =
+  if isPrim ty
+  then f ty
+  else "futark_" <> f ty
 
-capitalize :: Text -> Text
-capitalize text = T.singleton (toUpper (T.head text)) <> T.tail text
+mightApplySkolem :: (FutharkType -> RdrNameStr) -> FutharkType -> HsType'
+mightApplySkolem f ty =
+  let v = var . f $ ty
+  in  if isPrim ty
+      then v
+      else v @@ var "c"
+
+up :: (IsString a) => String -> a
+up = fromString
+
+prime :: (Semigroup a, IsString a) => a -> a
+prime i            = i <> "'"
+
+capitalize :: String -> String
+capitalize string = toUpper (head string):tail string
+
+raw :: ModuleNameStr
+raw = "Raw"
+
+entryApiName :: IsString a => FutharkEntry -> a
+entryApiName entry = up $ futEntryName entry
+
+entryRawName :: IsString a => FutharkEntry -> a
+entryRawName entry = up $ "entry_"<> futEntryName entry
+
+entryQualRawName :: FutharkEntry -> RdrNameStr
+entryQualRawName = qual raw . entryRawName
+
+entryCCallName :: IsString a => FutharkEntry -> a
+entryCCallName entry = up $ "futhark_entry_" <> futEntryName entry
+
+typeRawName :: IsString a => FutharkType -> a
+typeRawName = up . capitalize . futharkPrefix toHaskellType
+
+typeApiName :: IsString a => FutharkType -> a
+typeApiName = up . toHaskellType
+
+constructorName :: IsString a => FutharkType -> a
+constructorName = up . capitalize . toHaskellType

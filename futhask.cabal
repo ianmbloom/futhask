@@ -26,8 +26,9 @@ source-repository head
 library
   exposed-modules:
       CodeBodies
-      Conversion
+      Convert
       Debug
+      Declarations
       Generate
       Headers
       Manifest
