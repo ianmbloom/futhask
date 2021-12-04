@@ -69,8 +69,8 @@ dataDeclaration ty =
          ] []
 
 
-foreignImportCall :: String -> String -> [HsType'] -> HsType' -> HsExpr'
-foreignImportCall haskCallName cCallName params ret =
+generateFFIImport :: String -> String -> [HsType'] -> HsType' -> HsExpr'
+generateFFIImport haskCallName cCallName params ret =
     let ctx       = ptr (var "Futhark_context")
     in
        (    var "foreign"
@@ -97,16 +97,16 @@ declareObject ty =
 
 declareArray :: FutharkType -> HsDecl'
 declareArray ty =
-  let con           = var .            up $ constructorName ty
-      elt           = var .            up $ futPrimToHask . tyElem $ ty
-      qualRaw       = var . qual raw . up $             typeRawName ty
-      qualRawShape  = var . qual raw . up $ shapeApiName ty
-      qualRawNew    = var . qual raw . up $ "new_"   <> typeApiName ty
-      qualRawValues = var . qual raw . up $ "values_"<> typeApiName ty
+  let con           = var            $ constructorName ty
+      qualRaw       = var . qual raw $ typeRawName     ty
+      qualRawShape  = var . qual raw $ shapeApiName    ty
+      qualRawNew    = var . qual raw $ newApiName      ty
+      qualRawValues = var . qual raw $ valuesApiName   ty
+      elt           = var . up $ futPrimToHask . tyElem $ ty
       dim           = tyRank ty
-      dimVar        = var .            up $ "M.Ix"   <> show dim
-      toFun         = var .            up $ "to"     <> show dim <> "d"
-      fromFun       = var .            up $ "from"   <> show dim <> "d"
+      dimVar        = var . up $ "M.Ix" <> show dim
+      toFun         = var . up $ "to"   <> show dim <> "d"
+      fromFun       = var . up $ "from" <> show dim <> "d"
   in  instance' (var "FutharkArray" @@ con @@ qualRaw @@ dimVar @@ elt)
         [ funBind "shapeFA"  $ match [] $ toFun   @@ qualRawShape
         , funBind "newFA"    $ match [] $ fromFun @@ qualRawNew
@@ -171,6 +171,7 @@ entryParts entry = appliedLayers [] []
     outLayers = map layerOut outParams
     appliedLayers :: LayerOp
     appliedLayers = foldLayers inLayers $ foldLayers outLayers coreBodies
+
     layerIn :: FutharkParameter -> LayerOp -> LayerOp
     layerIn param =
       if isPrim (pType param)
@@ -182,6 +183,7 @@ entryParts entry = appliedLayers [] []
     layerForeignPtr :: PName -> LayerOp -> LayerOp
     layerForeignPtr name body inVars outVars =
         body (prime name:inVars) outVars
+
     layerOut :: FutharkParameter -> LayerOp -> LayerOp
     layerOut param =
       let wrapIn = not . isPrim . pType $ param
@@ -190,8 +192,8 @@ entryParts entry = appliedLayers [] []
     layerMalloc wrapIn name body inVars outVars =
         let (retInBody, retOutBody)  = body inVars (name:outVars)
             peekF = if wrapIn then peekFreeWrapIn else peekFree
-        in  ( [(bvar . up         $ name) <-- malloc] ++ retInBody
-            , [(bvar . up . prime $ name) <-- peekF @@ (var . up $ name)] ++ retOutBody
+        in  ( ((bvar . up         $ name) <-- malloc                    ) :retInBody
+            , ((bvar . up . prime $ name) <-- peekF @@ (var . up $ name)) :retOutBody
             )
 
 withFOLayers :: [FutharkParameter] -> HsExpr' -> HsExpr'
