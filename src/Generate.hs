@@ -83,11 +83,11 @@ foreignImportCall haskCallName cCallName params ret =
       @::@
       foldr1 (-->) (ctx:params <> [var "IO" @@ ret])
 
-declareObject :: String -> String -> String -> HsDecl'
-declareObject apiName constructorName rawName =
-  let con         = up $ constructorName
-      qualRaw     = up $ "Raw." <> rawName
-      qualRawFree = up $ "Raw.free_" <> apiName
+declareObject :: FutharkType -> HsDecl'
+declareObject ty =
+  let con         = up $ constructorName ty
+      qualRaw     = up $ "Raw." <> typeRawName ty
+      qualRawFree = up $ "Raw.free_" <> typeApiName ty
   in
     instance' (var "FutharkObject" @@ var con @@ var qualRaw)
       [ funBind "wrapFO" $ match [] $ var con
@@ -95,14 +95,15 @@ declareObject apiName constructorName rawName =
       , funBind "fromFO" $ match [conP con [bvar "rc", bvar "fp"]] $ tuple [var "rc", var "fp"]
       ]
 
-declareArray :: String -> String -> String -> Int -> String -> HsDecl'
-declareArray apiName constructorName rawName dim element =
-  let con           = var .            up $ constructorName
-      elt           = var .            up $ element
-      qualRaw       = var . qual raw . up $             rawName
-      qualRawShape  = var . qual raw . up $ "shape_" <> apiName
-      qualRawNew    = var . qual raw . up $ "new_"   <> apiName
-      qualRawValues = var . qual raw . up $ "values_"<> apiName
+declareArray :: FutharkType -> HsDecl'
+declareArray ty =
+  let con           = var .            up $ constructorName ty
+      elt           = var .            up $ futPrimToHask . tyElem $ ty
+      qualRaw       = var . qual raw . up $             typeRawName ty
+      qualRawShape  = var . qual raw . up $ shapeApiName ty
+      qualRawNew    = var . qual raw . up $ "new_"   <> typeApiName ty
+      qualRawValues = var . qual raw . up $ "values_"<> typeApiName ty
+      dim           = tyRank ty
       dimVar        = var .            up $ "M.Ix"   <> show dim
       toFun         = var .            up $ "to"     <> show dim <> "d"
       fromFun       = var .            up $ "from"   <> show dim <> "d"
@@ -141,7 +142,7 @@ declareEntry entry =
     funcDeclaration = funBind entryName . match (map (bvar . up . pName) inParams) $
                           op (var $ qual "Fut" "unsafeLiftFromIO") "$" $
                           lambda [bvar "context"] $
-                          withFOLayers inParams $ 
+                          withFOLayers inParams $
                           (do' (call ++ postCall))
 
 entryParts :: FutharkEntry -> ([Stmt'], [Stmt'])

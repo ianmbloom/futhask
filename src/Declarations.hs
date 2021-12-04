@@ -10,23 +10,17 @@ import qualified Data.Map  as M
 import Data.Map ((!))
 import Debug
 import Data.String (IsString(..))
+import Control.Monad
 import GHC.SourceGen
 
 import Generate
 import Name
 import Type
 
-addPtrToArray :: (FutharkType -> HsType') -> FutharkType -> HsType'
-addPtrToArray f ty =
-  let level = if isPrim ty
-              then id
-              else ptr
-  in  level (f ty)
-
 arrayNewCall :: FutharkType -> HsExpr'
 arrayNewCall ty =
-  let haskName    = "new_" <> buildArrayName ty
-      cName       = haskName
+  let haskName    = newApiName ty
+      cName       = newCName   ty
       arrayType   = ptr (var . up . futPrimToHask . tyElem $ ty)
       shapeParams = replicate (tyRank ty) (var "Int64")
       returnType  = ptr (var . typeRawName $ ty)
@@ -34,16 +28,16 @@ arrayNewCall ty =
 
 arrayFreeCall :: FutharkType -> HsExpr'
 arrayFreeCall ty =
-  let haskName    = "free_" <> buildArrayName ty
-      cName       = haskName
+  let haskName    = freeApiName ty
+      cName       = freeCName   ty
       inputType   = ptr (var . typeRawName $ ty)
       returnType  = var "Int"
   in  foreignImportCall haskName cName [inputType] returnType
 
 arrayValuesCall :: FutharkType -> HsExpr'
 arrayValuesCall ty =
-  let haskName    = "values_" <> buildArrayName ty
-      cName       = haskName
+  let haskName    = valuesApiName ty
+      cName       = valuesCName   ty
       inputType   = ptr (var . typeRawName $ ty)
       outputType  = ptr (var . up . futPrimToHask . tyElem $ ty)
       returnType  = var "Int"
@@ -51,16 +45,16 @@ arrayValuesCall ty =
 
 arrayShapeCall :: FutharkType -> HsExpr'
 arrayShapeCall ty =
-  let haskName    = "shape_" <> buildArrayName ty
-      cName       = haskName
+  let haskName    = shapeApiName ty
+      cName       = shapeCName   ty
       inputTypes  = ptr (var . typeRawName $ ty)
       returnType  = ptr (var "Int64")
   in  foreignImportCall haskName cName [inputTypes] returnType
 
 opaqueFreeCall :: FutharkType -> HsExpr'
 opaqueFreeCall ty =
-  let haskName   = "free_" <> tyOpaqueBase ty
-      cName      = "free_opaque_" <> tyOpaqueBase ty
+  let haskName   = freeApiName ty
+      cName      = freeCName   ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    ]
       returnType = (var "Int")
@@ -68,8 +62,8 @@ opaqueFreeCall ty =
 
 opaqueStoreCall :: FutharkType -> HsExpr'
 opaqueStoreCall ty =
-  let haskName    = "store_" <> tyOpaqueBase ty
-      cName       = "store_opaque_" <> tyOpaqueBase ty
+  let haskName    = storeApiName ty
+      cName       = storeCName   ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    , ptrs 2 (var "()")
                    , ptr (var "CSize")
@@ -79,8 +73,8 @@ opaqueStoreCall ty =
 
 opaqueRestoreCall :: FutharkType -> HsExpr'
 opaqueRestoreCall ty =
-  let haskName  = "restore_" <> tyOpaqueBase ty
-      cName     = "restore_opaque_" <> tyOpaqueBase ty
+  let haskName  = restoreApiName ty
+      cName     = restoreCName   ty
       inputTypes = [ptr (var "()")]
       returnType = ptr (var . typeRawName $ ty)
   in  foreignImportCall haskName cName inputTypes returnType
@@ -100,6 +94,12 @@ foreignTypeOpDeclarationSet ty =
         , opaqueRestoreCall ty
         ]
 
+addPtrToArray :: (FutharkType -> HsType') -> FutharkType -> HsType'
+addPtrToArray f ty =
+  if isPrim ty
+  then      f ty
+  else ptr (f ty)
+
 foreignEntryDeclaration :: FutharkEntry -> HsExpr'
 foreignEntryDeclaration entry =
     let entryName  = entryRawName entry
@@ -110,12 +110,6 @@ foreignEntryDeclaration entry =
 
 instanceDeclaration :: FutharkType -> [HsDecl']
 instanceDeclaration ty =
-  let element = futPrimToHask . tyElem $ ty
-      dim     = tyRank ty
-  in  [declareObject (typeApiName ty) (constructorName ty ) (typeRawName ty)]
+      [declareObject ty]
       ++
-      case ty of
-        Array  {} ->
-            [declareArray (typeApiName ty) (constructorName ty) (typeRawName ty) dim element]
-        Opaque {} ->
-            []
+      if isArray ty then [declareArray ty] else []

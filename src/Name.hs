@@ -27,6 +27,12 @@ mightApplySkolem f ty =
       then v
       else v @@ var "c"
 
+mightOpaque :: (FutharkType -> String) -> FutharkType -> String
+mightOpaque f ty =
+  case ty of
+    Opaque {} -> "opaque_" <> f ty
+    _ -> f ty
+
 up :: (IsString a) => String -> a
 up = fromString
 
@@ -56,3 +62,35 @@ typeApiName = up . toHaskellType
 
 constructorName :: IsString a => FutharkType -> a
 constructorName = up . capitalize . toHaskellType
+
+opApiName :: IsString a => String -> FutharkType -> a
+opApiName op ty = up $ op <> "_" <> toHaskellType ty
+
+newApiName      :: IsString a => FutharkType -> a
+freeApiName     :: IsString a => FutharkType -> a
+valuesApiName   :: IsString a => FutharkType -> a
+shapeApiName    :: IsString a => FutharkType -> a
+storeApiName    :: IsString a => FutharkType -> a
+restoreApiName  :: IsString a => FutharkType -> a
+newApiName     = opApiName "new"
+freeApiName    = opApiName "free"
+valuesApiName  = opApiName "values"
+shapeApiName   = opApiName "shape"
+storeApiName   = opApiName "store"
+restoreApiName = opApiName "restore"
+
+opCName :: IsString a => String -> FutharkType -> a
+opCName op ty = up $ op <> "_" <> mightOpaque toHaskellType ty
+
+newCName      :: IsString a => FutharkType -> a
+freeCName     :: IsString a => FutharkType -> a
+valuesCName   :: IsString a => FutharkType -> a
+shapeCName    :: IsString a => FutharkType -> a
+storeCName    :: IsString a => FutharkType -> a
+restoreCName  :: IsString a => FutharkType -> a
+newCName     = opCName "new"
+freeCName    = opCName "free"
+valuesCName  = opCName "values"
+shapeCName   = opCName "shape"
+storeCName   = opCName "store"
+restoreCName = opCName "restore"

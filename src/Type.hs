@@ -40,10 +40,16 @@ data FutharkEntry =
     }
 
 isPrim :: FutharkType -> Bool
-isPrim param =
-  case param of
+isPrim ty =
+  case ty of
     Prim {} -> True
     _       -> False
+
+isArray :: FutharkType -> Bool
+isArray ty =
+  case ty of
+    Array {} -> True
+    _        -> False
 
 buildArrayName :: FutharkType -> String
 buildArrayName ty =

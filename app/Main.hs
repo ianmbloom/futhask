@@ -32,18 +32,13 @@ writeModule backend directory moduleName (subModuleName, headerF, body)
 
 main :: IO ()
 main = do
-    putStrLn "futhask version 0.2.2"
+    putStrLn "Starting futhask version 0.2.2:"
     args <- getArgs
-    [ backendS, jsonName, srcDir, moduleName ] <- getArgs >>= \args -> case args of
-         [a, b, c, d] -> return args
-         _            -> error "futhask takes four arguments:\n - backend (c, opencl, cuda)\n - Futhark JSON file\n - Haskell source directory\n - module name"
+    [jsonName, srcDir, moduleName ] <- getArgs >>= \args -> case args of
+         [a, b, c] -> return args
+         _         -> error "futhask takes three arguments:\n - Futhark JSON file\n - Haskell source directory\n - module name"
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     manifest <- readManifest jsonName
-    -- backend <- case backendS of
-    --     "c"      -> return C
-    --     "opencl" -> return OpenCL
-    --     "cuda"   -> return Cuda
-    --     _        -> error $ "unknown backend: " ++ backendS ++ "\n  available backends: c, opencl, cuda"
     let backend   = manifestBackend manifest
     let typeMap   = buildFutharkTypes manifest
     let types     = M.elems typeMap
@@ -65,3 +60,4 @@ main = do
         , (Just "Wrap", wrapHeader, wrapBody)
         , (Just "Utils", utilsHeader, utilsBody)
         , (Nothing, exportsHeader, "") ]
+    putStrLn "Futhask wrapper generation complete."
