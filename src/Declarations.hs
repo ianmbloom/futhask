@@ -110,8 +110,7 @@ foreignEntryDeclaration entry =
 
 instanceDeclaration :: FutharkType -> [HsDecl']
 instanceDeclaration ty =
-  let
-      element = futPrimToHask . tyElem $ ty
+  let element = futPrimToHask . tyElem $ ty
       dim     = tyRank ty
   in  [declareObject (typeApiName ty) (constructorName ty ) (typeRawName ty)]
       ++

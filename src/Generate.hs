@@ -112,6 +112,11 @@ declareArray apiName constructorName rawName dim element =
         , funBind "valuesFA" $ match [] $ qualRawValues
         ]
 
+type LayerOp = [PName] -> [PName] -> ([Stmt'],[Stmt'])
+
+foldLayers :: [a -> a] -> a -> a
+foldLayers layers body = foldl (flip ($)) body layers
+
 declareEntry :: FutharkEntry -> [HsDecl']
 declareEntry entry =
   [ typeDeclaration
@@ -122,23 +127,11 @@ declareEntry entry =
     inParams  = futEntryInParams  entry
     outParams :: [FutharkParameter]
     outParams = futEntryOutParams entry
-    lambdaWithFO :: FutharkParameter -> HsExpr' -> HsExpr'
-    lambdaWithFO param body =
-      if isPrim . pType $ param
-      then body
-      else op (withFO @@ (var . up $ pName param)) "$" (lambda [bvar . up . prime . pName $ param] body)
-    fOLayers = map lambdaWithFO inParams
-    inLayers :: [([PName] -> [PName] -> ([Stmt'],[Stmt'])) ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])]
-    inLayers  = map layerIn inParams
-    outLayers :: [([PName] -> [PName] -> ([Stmt'],[Stmt'])) ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])]
-    outLayers = map layerOut outParams
-    layers :: [PName] -> [PName] -> ([Stmt'],[Stmt'])
-    layers = foldl (flip ($)) (foldl (flip ($)) body outLayers) inLayers
-    (call, postCall) = layers [] []
     entryName :: OccNameStr
     entryName = entryApiName entry
     outType :: FutharkParameter -> HsType'
     outType ty = (mightApplySkolem constructorName . pType $ ty)
+    (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName
                     $   [var "Monad" @@ var "m"]
@@ -148,8 +141,16 @@ declareEntry entry =
     funcDeclaration = funBind entryName . match (map (bvar . up . pName) inParams) $
                           op (var $ qual "Fut" "unsafeLiftFromIO") "$" $
                           lambda [bvar "context"] $
-                          foldr ($)
-                          (do' (call ++ postCall)) fOLayers
+                          withFOLayers inParams $ 
+                          (do' (call ++ postCall))
+
+entryParts :: FutharkEntry -> ([Stmt'], [Stmt'])
+entryParts entry = appliedLayers [] []
+  where
+    inParams  :: [FutharkParameter]
+    inParams  = futEntryInParams  entry
+    outParams :: [FutharkParameter]
+    outParams = futEntryOutParams entry
     applyEntry :: [PName] -> [PName] -> Stmt'
     applyEntry ins outs = stmt $
                      inContextWithError @@ var "context" @@ lambda [bvar . up . prime $ "context"]
@@ -161,42 +162,45 @@ declareEntry entry =
     returnOut :: [PName] -> Stmt'
     returnOut outs = stmt $
                      return' @@ (mightTuple $ (map (bvar . up . prime) outs :: [HsExpr']))
-    body :: [PName] -> [PName] -> ([Stmt'], [Stmt'])
-    body ins outs = ([applyEntry ins outs], [returnOut outs])
-    layerIn :: FutharkParameter
-            -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
-            ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    coreBodies :: LayerOp
+    coreBodies ins outs = ([applyEntry ins outs], [returnOut outs])
+    inLayers :: [LayerOp -> LayerOp]
+    inLayers  = map layerIn inParams
+    outLayers :: [LayerOp -> LayerOp]
+    outLayers = map layerOut outParams
+    appliedLayers :: LayerOp
+    appliedLayers = foldLayers inLayers $ foldLayers outLayers coreBodies
+    layerIn :: FutharkParameter -> LayerOp -> LayerOp
     layerIn param =
       if isPrim (pType param)
       then layerPrimitive  (pName param)
       else layerForeignPtr (pName param)
-    layerPrimitive :: PName
-                   -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
-                   ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerPrimitive :: PName -> LayerOp -> LayerOp
     layerPrimitive name body inVars outVars =
         body (name:inVars) outVars
-    layerForeignPtr :: PName
-                    -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
-                    ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerForeignPtr :: PName -> LayerOp -> LayerOp
     layerForeignPtr name body inVars outVars =
-        let ( retInBody, retOutBody) = body (prime name:inVars) outVars
-        in  ( retInBody
-            , retOutBody
-            )
-    layerOut :: FutharkParameter
-            -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
-            ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+        body (prime name:inVars) outVars
+    layerOut :: FutharkParameter -> LayerOp -> LayerOp
     layerOut param =
       let wrapIn = not . isPrim . pType $ param
       in  layerMalloc wrapIn (pName param)
-
-    layerMalloc :: Bool
-                -> PName
-                -> ([PName] -> [PName] -> ([Stmt'],[Stmt']))
-                ->  [PName] -> [PName] -> ([Stmt'],[Stmt'])
+    layerMalloc :: Bool -> PName -> LayerOp -> LayerOp
     layerMalloc wrapIn name body inVars outVars =
         let (retInBody, retOutBody)  = body inVars (name:outVars)
             peekF = if wrapIn then peekFreeWrapIn else peekFree
         in  ( [(bvar . up         $ name) <-- malloc] ++ retInBody
             , [(bvar . up . prime $ name) <-- peekF @@ (var . up $ name)] ++ retOutBody
             )
+
+withFOLayers :: [FutharkParameter] -> HsExpr' -> HsExpr'
+withFOLayers inParams expr =
+   foldr ($) expr fOLayers
+   where
+      lambdaWithFO :: FutharkParameter -> HsExpr' -> HsExpr'
+      lambdaWithFO param body =
+        if isPrim . pType $ param
+        then body
+        else op (withFO @@ (var . up $ pName param)) "$" (lambda [bvar . up . prime . pName $ param] body)
+      fOLayers :: [HsExpr'->HsExpr']
+      fOLayers = map lambdaWithFO inParams
