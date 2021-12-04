@@ -16,17 +16,17 @@ import Generate
 import Name
 import Type
 
-selectPtrLevel :: Int -> Int -> (FutharkType -> HsType') -> FutharkType -> HsType'
-selectPtrLevel primLevel arrayLevel f ty =
+addPtrToArray :: (FutharkType -> HsType') -> FutharkType -> HsType'
+addPtrToArray f ty =
   let level = if isPrim ty
-              then primLevel
-              else arrayLevel
-  in  ptrs level (f ty)
+              then id
+              else ptr
+  in  level (f ty)
 
 arrayNewCall :: FutharkType -> HsExpr'
 arrayNewCall ty =
   let haskName    = "new_" <> buildArrayName ty
-      cName       = "futhark_" <> haskName
+      cName       = haskName
       arrayType   = ptr (var . up . futPrimToHask . tyElem $ ty)
       shapeParams = replicate (tyRank ty) (var "Int64")
       returnType  = ptr (var . typeRawName $ ty)
@@ -35,7 +35,7 @@ arrayNewCall ty =
 arrayFreeCall :: FutharkType -> HsExpr'
 arrayFreeCall ty =
   let haskName    = "free_" <> buildArrayName ty
-      cName       = "futhark_" <> haskName
+      cName       = haskName
       inputType   = ptr (var . typeRawName $ ty)
       returnType  = var "Int"
   in  foreignImportCall haskName cName [inputType] returnType
@@ -43,7 +43,7 @@ arrayFreeCall ty =
 arrayValuesCall :: FutharkType -> HsExpr'
 arrayValuesCall ty =
   let haskName    = "values_" <> buildArrayName ty
-      cName       = "futhark_" <> haskName
+      cName       = haskName
       inputType   = ptr (var . typeRawName $ ty)
       outputType  = ptr (var . up . futPrimToHask . tyElem $ ty)
       returnType  = var "Int"
@@ -52,7 +52,7 @@ arrayValuesCall ty =
 arrayShapeCall :: FutharkType -> HsExpr'
 arrayShapeCall ty =
   let haskName    = "shape_" <> buildArrayName ty
-      cName       = "futhark_" <> haskName
+      cName       = haskName
       inputTypes  = ptr (var . typeRawName $ ty)
       returnType  = ptr (var "Int64")
   in  foreignImportCall haskName cName [inputTypes] returnType
@@ -60,7 +60,7 @@ arrayShapeCall ty =
 opaqueFreeCall :: FutharkType -> HsExpr'
 opaqueFreeCall ty =
   let haskName   = "free_" <> tyOpaqueBase ty
-      cName      = "futhark_" <> "free_opaque_" <> tyOpaqueBase ty
+      cName      = "free_opaque_" <> tyOpaqueBase ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    ]
       returnType = (var "Int")
@@ -69,7 +69,7 @@ opaqueFreeCall ty =
 opaqueStoreCall :: FutharkType -> HsExpr'
 opaqueStoreCall ty =
   let haskName    = "store_" <> tyOpaqueBase ty
-      cName       = "futhark_" <> "store_opaque_" <> tyOpaqueBase ty
+      cName       = "store_opaque_" <> tyOpaqueBase ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    , ptrs 2 (var "()")
                    , ptr (var "CSize")
@@ -80,7 +80,7 @@ opaqueStoreCall ty =
 opaqueRestoreCall :: FutharkType -> HsExpr'
 opaqueRestoreCall ty =
   let haskName  = "restore_" <> tyOpaqueBase ty
-      cName     = "futhark_" <> "restore_opaque_" <> tyOpaqueBase ty
+      cName     = "restore_opaque_" <> tyOpaqueBase ty
       inputTypes = [ptr (var "()")]
       returnType = ptr (var . typeRawName $ ty)
   in  foreignImportCall haskName cName inputTypes returnType
@@ -103,11 +103,10 @@ foreignTypeOpDeclarationSet ty =
 foreignEntryDeclaration :: FutharkEntry -> HsExpr'
 foreignEntryDeclaration entry =
     let entryName  = entryRawName entry
-        cEntryName = entryCCallName entry
-        outputTypes = map (selectPtrLevel 1 2 (var . typeRawName) . pType ) $ futEntryOutParams entry
-        inputTypes  = map (selectPtrLevel 0 1 (var . typeRawName) . pType ) $ futEntryInParams  entry
+        outputTypes = map (ptr . addPtrToArray (var . typeRawName) . pType ) $ futEntryOutParams entry
+        inputTypes  = map (      addPtrToArray (var . typeRawName) . pType ) $ futEntryInParams  entry
         params      = outputTypes <> inputTypes
-    in  foreignImportCall entryName cEntryName params (var "Int")
+    in  foreignImportCall entryName entryName params (var "Int")
 
 instanceDeclaration :: FutharkType -> [HsDecl']
 instanceDeclaration ty =
@@ -121,20 +120,3 @@ instanceDeclaration ty =
             [declareArray (typeApiName ty) (constructorName ty) (typeRawName ty) dim element]
         Opaque {} ->
             []
-
-foreignDataWrappers :: [FutharkType] -> [HsDecl']
-foreignDataWrappers = map foreignDataDeclaration
-
-foreignTypeOpDeclarations :: [FutharkType] -> [HsExpr']
-foreignTypeOpDeclarations = concatMap foreignTypeOpDeclarationSet
-
-foreignEntryDeclarations :: [FutharkEntry] -> [HsExpr']
-foreignEntryDeclarations = map foreignEntryDeclaration
-
-haskellDataWrappers :: [FutharkType] -> [HsDecl']
-haskellDataWrappers = map dataDeclaration
-haskellInstanceDeclarations :: [FutharkType] -> [HsDecl']
-haskellInstanceDeclarations = concatMap instanceDeclaration
-
-haskellEntryDeclarations :: [FutharkEntry] -> [HsDecl']
-haskellEntryDeclarations entries = concatMap declareEntry entries

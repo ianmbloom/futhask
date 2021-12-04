@@ -29,6 +29,7 @@ library
       Convert
       Debug
       Declarations
+      Encode
       Generate
       Headers
       Manifest

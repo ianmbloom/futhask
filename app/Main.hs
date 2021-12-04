@@ -14,7 +14,7 @@ import Convert
 import Headers
 import Manifest
 import Type
-import Generate(encodeGHC)
+import Encode
 
 writeModule :: p
             -> String
@@ -48,12 +48,12 @@ main = do
     let typeMap   = buildFutharkTypes manifest
     let types     = M.elems typeMap
     let entries   = M.elems $ buildEntries typeMap manifest
-    dataWrappers   <- unlines <$> mapM encodeGHC (foreignDataWrappers         types)
-    typeOps        <- unlines . map (drop 2) <$> mapM encodeGHC (foreignTypeOpDeclarations   types)
-    instances      <- unlines <$> mapM encodeGHC (haskellInstanceDeclarations types)
-    foreignEntries <- unlines . map (drop 2) <$> mapM encodeGHC (foreignEntryDeclarations entries)
-    haskellTypes   <- unlines <$> mapM encodeGHC (haskellDataWrappers         types)
-    haskellEntries <- unlines <$> mapM encodeGHC (haskellEntryDeclarations entries)
+    dataWrappers   <- foreignDataWrappers         types
+    typeOps        <- foreignTypeOpDeclarations   types
+    instances      <- haskellInstanceDeclarations types
+    foreignEntries <- foreignEntryDeclarations    entries
+    haskellTypes   <- haskellDataWrappers         types
+    haskellEntries <- haskellEntryDeclarations    entries
     mapM_ (writeModule backend srcDir moduleName)
         [ (Just "Raw", rawHeader, commonRawBody ++ dataWrappers ++ foreignEntries ++ typeOps)
         , (Just "Entries", entriesHeader, haskellEntries)

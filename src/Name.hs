@@ -14,26 +14,8 @@ import Data.String (IsString(..))
 import Type
 import GHC.SourceGen
 
-primTable :: [(Text, Text)]
-primTable =
-    [ ("f32", "Float" )
-    , ("f64", "Double")
-    , ("bool","CBool" )
-    , ("i8" , "Int8"  )
-    , ("i16", "Int16" )
-    , ("i32", "Int32" )
-    , ("i64", "Int64" )
-    , ("u8" , "Word8" )
-    , ("u16", "Word16")
-    , ("u32", "Word32")
-    , ("u64", "Word64")
-    ]
-
-maybePrim :: Text -> Maybe Text
-maybePrim key = lookup key primTable
-
-futharkPrefix :: (FutharkType -> String) -> FutharkType -> String
-futharkPrefix f ty =
+mightFutharkPrefix :: (FutharkType -> String) -> FutharkType -> String
+mightFutharkPrefix f ty =
   if isPrim ty
   then f ty
   else "futark_" <> f ty
@@ -61,16 +43,13 @@ entryApiName :: IsString a => FutharkEntry -> a
 entryApiName entry = up $ futEntryName entry
 
 entryRawName :: IsString a => FutharkEntry -> a
-entryRawName entry = up $ "entry_"<> futEntryName entry
+entryRawName entry = up $ "entry_" <> futEntryName entry
 
 entryQualRawName :: FutharkEntry -> RdrNameStr
 entryQualRawName = qual raw . entryRawName
 
-entryCCallName :: IsString a => FutharkEntry -> a
-entryCCallName entry = up $ "futhark_entry_" <> futEntryName entry
-
 typeRawName :: IsString a => FutharkType -> a
-typeRawName = up . capitalize . futharkPrefix toHaskellType
+typeRawName = up . capitalize . mightFutharkPrefix toHaskellType
 
 typeApiName :: IsString a => FutharkType -> a
 typeApiName = up . toHaskellType

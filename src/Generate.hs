@@ -11,9 +11,6 @@ import Data.Text (Text(..))
 
 
 import GHC.SourceGen
-import GHC.Paths (libdir)
-import GHC (runGhc, getSessionDynFlags)
-import GHC.Utils.Outputable(Outputable(..))
 
 import qualified Data.Map as M
 import Manifest
@@ -58,11 +55,6 @@ ptrs i a =
   then ptr (ptrs (i-1) a)
   else a
 
-encodeGHC :: Outputable a => a ->  IO String
-encodeGHC x = runGhc (Just libdir) $ do
-   dynFlags <- getSessionDynFlags
-   return $ showPpr dynFlags x
-
 foreignDataDeclaration :: FutharkType -> HsDecl'
 foreignDataDeclaration ty =
     data' (typeRawName ty) [] [] []
@@ -85,7 +77,7 @@ foreignImportCall haskCallName cCallName params ret =
          @@ var "import"
          @@ var "ccall"
          @@ var "unsafe"
-         @@ string cCallName
+         @@ string ("futhark_" <> cCallName)
          @@ (var . up $ haskCallName)
       )
       @::@
