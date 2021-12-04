@@ -73,8 +73,8 @@ opaqueStoreCall ty =
 
 opaqueRestoreCall :: FutharkType -> HsExpr'
 opaqueRestoreCall ty =
-  let haskName  = restoreApiName ty
-      cName     = restoreCName   ty
+  let haskName   = restoreApiName ty
+      cName      = restoreCName   ty
       inputTypes = [ptr (var "()")]
       returnType = ptr (var . typeRawName $ ty)
   in  generateFFIImport haskName cName inputTypes returnType

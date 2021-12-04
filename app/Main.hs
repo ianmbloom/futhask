@@ -39,10 +39,10 @@ main = do
          _         -> error "futhask takes three arguments:\n - Futhark JSON file\n - Haskell source directory\n - module name"
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     manifest <- readManifest jsonName
-    let backend   = manifestBackend manifest
-    let typeMap   = buildFutharkTypes manifest
-    let types     = M.elems typeMap
-    let entries   = M.elems $ buildEntries typeMap manifest
+    let backend = manifestBackend manifest
+        typeMap = buildFutharkTypes manifest
+        types   = M.elems typeMap
+        entries = M.elems $ buildEntries typeMap manifest
     dataWrappers   <- foreignDataWrappers         types
     typeOps        <- foreignTypeOpDeclarations   types
     instances      <- haskellInstanceDeclarations types
@@ -50,14 +50,17 @@ main = do
     haskellTypes   <- haskellDataWrappers         types
     haskellEntries <- haskellEntryDeclarations    entries
     mapM_ (writeModule backend srcDir moduleName)
-        [ (Just "Raw", rawHeader, commonRawBody ++ dataWrappers ++ foreignEntries ++ typeOps)
-        , (Just "Entries", entriesHeader, haskellEntries)
-        , (Just "Types", typesHeader, haskellTypes ++ instances)
-        , (Just "TypeClasses", typeClassesHeader, typeClassesBody)
-        , (Just "Context", contextHeader, contextBody)
-        , (Just "Config", configHeader, configBody backend)
-        , (Just "Fut", futHeader, futBody)
-        , (Just "Wrap", wrapHeader, wrapBody)
-        , (Just "Utils", utilsHeader, utilsBody)
+        [ (Just "Raw"        , rawHeader        ,    commonRawBody
+                                                  ++ dataWrappers 
+                                                  ++ foreignEntries
+                                                  ++ typeOps               )
+        , (Just "Entries"    , entriesHeader    , haskellEntries           )
+        , (Just "Types"      , typesHeader      , haskellTypes ++ instances)
+        , (Just "TypeClasses", typeClassesHeader, typeClassesBody          )
+        , (Just "Context"    , contextHeader    , contextBody              )
+        , (Just "Config"     , configHeader     , configBody backend       )
+        , (Just "Fut"        , futHeader        , futBody                  )
+        , (Just "Wrap"       , wrapHeader       , wrapBody                 )
+        , (Just "Utils"      , utilsHeader      , utilsBody                )
         , (Nothing, exportsHeader, "") ]
     putStrLn "Futhask wrapper generation complete."

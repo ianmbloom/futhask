@@ -23,19 +23,20 @@ withFO             :: HsExpr'
 peekFree           :: HsExpr'
 peekFreeWrapIn     :: HsExpr'
 inContextWithError :: HsExpr'
-malloc             = var $ qual "F" "malloc"
+unsafeLiftFromIO'  :: HsExpr'
+monadConstraint    :: HsType'
+malloc             = var (qual "F" "malloc")
 withFO             = var (qual "T" "withFO")
 peekFree           = var (qual "U" "peekFree"          )
 peekFreeWrapIn     = var (qual "U" "peekFreeWrapIn"    ) @@ var "context"
 inContextWithError = var (qual "C" "inContextWithError")
-futT               :: HsType'
-c                  :: HsType'
-m                  :: HsType'
-futT               = var "FutT"
-c                  = var "c"
-m                  = var "m"
+unsafeLiftFromIO'  = var (qual "Fut" "unsafeLiftFromIO")
+monadConstraint    = var "Monad" @@ var "m"
+
+futTMonad :: HsType'
+futTMonad = var "FutT" @@ var "c" @@ var "m"
 return' :: HsExpr'
-return'            = var "return"
+return' = var "return"
 
 append :: [a] -> a -> [a]
 append xs y = xs ++ [y]
@@ -135,12 +136,12 @@ declareEntry entry =
     (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName
-                    $   [var "Monad" @@ var "m"]
+                    $   [monadConstraint]
                     ==> foldr1 (-->) (map outType inParams ++
-                        [futT @@ c @@ m @@ mightTuple (map outType outParams)])
+                        [futTMonad @@ mightTuple (map outType outParams)])
     funcDeclaration :: HsDecl'
     funcDeclaration = funBind entryName . match (map (bvar . up . pName) inParams) $
-                          op (var $ qual "Fut" "unsafeLiftFromIO") "$" $
+                          op unsafeLiftFromIO' "$" $
                           lambda [bvar "context"] $
                           withFOLayers inParams $
                           (do' (call ++ postCall))
