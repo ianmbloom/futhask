@@ -142,28 +142,34 @@ getContext options = do
         $ (forkIO $ freeContext childCount context)
         >> return ()
 
+freeContext :: MVar Integer -> Ptr Raw.Futhark_context -> IO ()
 freeContext childCount pointer
     = readMVar childCount >>= \n
     -> if n == 0
         then Raw.context_free pointer
         else yield >> freeContext childCount pointer
 
+inContext :: Context -> (Ptr Raw.Futhark_context -> IO a) -> IO a
 inContext (Context _ fp) = withForeignPtr fp
 
+getError :: Context -> IO ()
 getError context = do
     cs <- inContext context Raw.context_get_error
     s <- peekCString cs
     F.free cs
     error s
 
+clearError :: Context -> IO ()
 clearError context = inContext context Raw.context_get_error >>= F.free
 
+clearCache :: Context -> IO ()
 clearCache context
     = inContext context Raw.context_clear_caches >>= \code
     -> if code == 0
         then return ()
         else getError context
 
+syncContext :: Context -> IO ()
 syncContext context
     = inContext context Raw.context_sync >>= \code
     -> if code == 0
