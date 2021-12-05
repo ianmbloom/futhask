@@ -33,7 +33,7 @@ lookupEntry manifest = (M.!) (manifestEntryPoints manifest)
 
 mkInParameter ::  M.Map String FutharkType -> Int -> Input -> FutharkParameter
 mkInParameter mapping i input =
-  FParam { pName   = "in" <> show i -- unpack . inputName $ input
+  FParam { pName   = unpack . inputName $ input -- "in" <> show i
          , pUnique = inputUnique input
          , pType   = mkFutType mapping . unpack . inputType $ input
          }
