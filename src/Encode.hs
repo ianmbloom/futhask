@@ -3,6 +3,7 @@ module Encode
 where
 
 import Control.Monad
+import Data.List
 import GHC.SourceGen
 import GHC.Paths (libdir)
 import GHC (runGhc, getSessionDynFlags)

@@ -117,7 +117,7 @@ declareArray ty =
 type LayerOp = [PName] -> [PName] -> ([Stmt'],[Stmt'])
 
 foldLayers :: [a -> a] -> a -> a
-foldLayers layers body = foldl (flip ($)) body layers
+foldLayers layers body = foldr ($) body layers
 
 declareEntry :: FutharkEntry -> [HsDecl']
 declareEntry entry =
@@ -180,21 +180,20 @@ entryParts entry = appliedLayers [] []
       else layerForeignPtr (pName param)
     layerPrimitive :: PName -> LayerOp -> LayerOp
     layerPrimitive name body inVars outVars =
-        body (name:inVars) outVars
+        body (append inVars name) outVars
     layerForeignPtr :: PName -> LayerOp -> LayerOp
     layerForeignPtr name body inVars outVars =
-        body (prime name:inVars) outVars
-
+        body (append inVars $ prime name) outVars
     layerOut :: FutharkParameter -> LayerOp -> LayerOp
     layerOut param =
       let wrapIn = not . isPrim . pType $ param
       in  layerMalloc wrapIn (pName param)
     layerMalloc :: Bool -> PName -> LayerOp -> LayerOp
     layerMalloc wrapIn name body inVars outVars =
-        let (retInBody, retOutBody)  = body inVars (name:outVars)
+        let (retInBody, retOutBody)  = body inVars (append outVars name)
             peekF = if wrapIn then peekFreeWrapIn else peekFree
-        in  ( ((bvar . up         $ name) <-- malloc                    ) :retInBody
-            , ((bvar . up . prime $ name) <-- peekF @@ (var . up $ name)) :retOutBody
+        in  ( ((bvar . up         $ name) <-- malloc                    ):retInBody
+            , ((bvar . up . prime $ name) <-- peekF @@ (var . up $ name)):retOutBody
             )
 
 withFOLayers :: [FutharkParameter] -> HsExpr' -> HsExpr'
