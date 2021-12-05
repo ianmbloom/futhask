@@ -9,6 +9,7 @@ import System.Directory
 import System.Environment
 import qualified Data.Text as T
 import CodeBodies
+import RawBodies
 import Declarations
 import Convert
 import Headers
@@ -51,7 +52,8 @@ main = do
     haskellEntries <- haskellEntryDeclarations    entries
     mapM_ (writeModule backend srcDir moduleName)
         [ (Just "Raw"        , rawHeader        ,    commonRawBody
-                                                  ++ dataWrappers 
+                                                  ++ rawBody backend
+                                                  ++ dataWrappers
                                                   ++ foreignEntries
                                                   ++ typeOps               )
         , (Just "Entries"    , entriesHeader    , haskellEntries           )
