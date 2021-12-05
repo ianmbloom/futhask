@@ -135,19 +135,22 @@ getContext options = do
     config <- Raw.context_config_new
     mapM_ (setOption config) options
     context <- Raw.context_new config
-    Raw.context_config_free config
     childCount <- newMVar 0
     fmap (Context childCount)
         $ FC.newForeignPtr context
-        $ (forkIO $ freeContext childCount context)
+        $ (forkIO $ freeContext childCount config context)
         >> return ()
 
-freeContext :: MVar Integer -> Ptr Raw.Futhark_context -> IO ()
-freeContext childCount pointer
+freeContext :: MVar Int
+            -> Ptr Raw.Futhark_context_config
+            -> Ptr Raw.Futhark_context
+            -> IO ()
+freeContext childCount config context
     = readMVar childCount >>= \n
     -> if n == 0
-        then Raw.context_free pointer
-        else yield >> freeContext childCount pointer
+        then do Raw.context_free context
+                Raw.context_config_free config
+        else yield >> freeContext childCount config context
 
 inContext :: Context -> (Ptr Raw.Futhark_context -> IO a) -> IO a
 inContext (Context _ fp) = withForeignPtr fp
