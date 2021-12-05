@@ -19,7 +19,7 @@ import Type
 
 arrayNewCall :: FutharkType -> HsExpr'
 arrayNewCall ty =
-  let haskName    = newApiName ty
+  let haskName    = apiNameNew ty
       cName       = newCName   ty
       arrayType   = ptr (var . up . futPrimToHask . tyElem $ ty)
       shapeParams = replicate (tyRank ty) (var "Int64")
@@ -28,7 +28,7 @@ arrayNewCall ty =
 
 arrayFreeCall :: FutharkType -> HsExpr'
 arrayFreeCall ty =
-  let haskName    = freeApiName ty
+  let haskName    = apiNameFree ty
       cName       = freeCName   ty
       inputType   = ptr (var . typeRawName $ ty)
       returnType  = var "Int"
@@ -36,7 +36,7 @@ arrayFreeCall ty =
 
 arrayValuesCall :: FutharkType -> HsExpr'
 arrayValuesCall ty =
-  let haskName    = valuesApiName ty
+  let haskName    = apiNameValues ty
       cName       = valuesCName   ty
       inputType   = ptr (var . typeRawName $ ty)
       outputType  = ptr (var . up . futPrimToHask . tyElem $ ty)
@@ -45,7 +45,7 @@ arrayValuesCall ty =
 
 arrayShapeCall :: FutharkType -> HsExpr'
 arrayShapeCall ty =
-  let haskName    = shapeApiName ty
+  let haskName    = apiNameShape ty
       cName       = shapeCName   ty
       inputTypes  = ptr (var . typeRawName $ ty)
       returnType  = ptr (var "Int64")
@@ -53,7 +53,7 @@ arrayShapeCall ty =
 
 opaqueFreeCall :: FutharkType -> HsExpr'
 opaqueFreeCall ty =
-  let haskName   = freeApiName ty
+  let haskName   = apiNameFree ty
       cName      = freeCName   ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    ]
@@ -62,7 +62,7 @@ opaqueFreeCall ty =
 
 opaqueStoreCall :: FutharkType -> HsExpr'
 opaqueStoreCall ty =
-  let haskName    = storeApiName ty
+  let haskName    = apiNameStore ty
       cName       = storeCName   ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    , ptrs 2 (var "()")
@@ -73,7 +73,7 @@ opaqueStoreCall ty =
 
 opaqueRestoreCall :: FutharkType -> HsExpr'
 opaqueRestoreCall ty =
-  let haskName   = restoreApiName ty
+  let haskName   = apiNameRestore ty
       cName      = restoreCName   ty
       inputTypes = [ptr (var "()")]
       returnType = ptr (var . typeRawName $ ty)

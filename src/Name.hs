@@ -37,7 +37,7 @@ up :: (IsString a) => String -> a
 up = fromString
 
 prime :: (Semigroup a, IsString a) => a -> a
-prime i            = i <> "'"
+prime i = i <> "'"
 
 capitalize :: String -> String
 capitalize string = toUpper (head string):tail string
@@ -63,21 +63,21 @@ typeApiName = up . toHaskellType
 constructorName :: IsString a => FutharkType -> a
 constructorName = up . capitalize . toHaskellType
 
-opApiName :: IsString a => String -> FutharkType -> a
-opApiName op ty = up $ op <> "_" <> toHaskellType ty
+apiNameOp :: IsString a => String -> FutharkType -> a
+apiNameOp op ty = up $ op <> "_" <> toHaskellType ty
 
-newApiName      :: IsString a => FutharkType -> a
-freeApiName     :: IsString a => FutharkType -> a
-valuesApiName   :: IsString a => FutharkType -> a
-shapeApiName    :: IsString a => FutharkType -> a
-storeApiName    :: IsString a => FutharkType -> a
-restoreApiName  :: IsString a => FutharkType -> a
-newApiName     = opApiName "new"
-freeApiName    = opApiName "free"
-valuesApiName  = opApiName "values"
-shapeApiName   = opApiName "shape"
-storeApiName   = opApiName "store"
-restoreApiName = opApiName "restore"
+apiNameNew      :: IsString a => FutharkType -> a
+apiNameFree     :: IsString a => FutharkType -> a
+apiNameValues   :: IsString a => FutharkType -> a
+apiNameShape    :: IsString a => FutharkType -> a
+apiNameStore    :: IsString a => FutharkType -> a
+apiNameRestore  :: IsString a => FutharkType -> a
+apiNameNew     = apiNameOp "new"
+apiNameFree    = apiNameOp "free"
+apiNameValues  = apiNameOp "values"
+apiNameShape   = apiNameOp "shape"
+apiNameStore   = apiNameOp "store"
+apiNameRestore = apiNameOp "restore"
 
 opCName :: IsString a => String -> FutharkType -> a
 opCName op ty = up $ op <> "_" <> mightOpaque toHaskellType ty

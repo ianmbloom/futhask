@@ -100,9 +100,9 @@ declareArray :: FutharkType -> HsDecl'
 declareArray ty =
   let con           = var            $ constructorName ty
       qualRaw       = var . qual raw $ typeRawName     ty
-      qualRawShape  = var . qual raw $ shapeApiName    ty
-      qualRawNew    = var . qual raw $ newApiName      ty
-      qualRawValues = var . qual raw $ valuesApiName   ty
+      qualRawShape  = var . qual raw $ apiNameShape    ty
+      qualRawNew    = var . qual raw $ apiNameNew      ty
+      qualRawValues = var . qual raw $ apiNameValues   ty
       elt           = var . up $ futPrimToHask . tyElem $ ty
       dim           = tyRank ty
       dimVar        = var . up $ "M.Ix" <> show dim
