@@ -15,12 +15,12 @@ withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
 withFO = withForeignPtr . snd . fromFO
 
 addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
-addReferenceFO fo = lift . liftIO $
+addReferenceFO fo = liftIO $
     let (referenceCounter, _) = fromFO fo
      in modifyMVar_ referenceCounter (\r -> pure (r+1))
 
 finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
-finalizeFO fo = lift . liftIO $
+finalizeFO fo = liftIO $
     let (referenceCounter, pointer) = fromFO fo
      in modifyMVar_ referenceCounter (\r
      -> if r > 0
