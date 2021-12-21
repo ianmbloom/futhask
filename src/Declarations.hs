@@ -17,53 +17,53 @@ import Generate
 import Name
 import Type
 
-arrayNewCall :: FutharkType -> HsExpr'
-arrayNewCall ty =
+arrayCallNew :: FutharkType -> HsExpr'
+arrayCallNew ty =
   let haskName    = apiNameNew ty
-      cName       = newCName   ty
+      cName       = cNameNew   ty
       arrayType   = ptr (var . up . futPrimToHask . tyElem $ ty)
       shapeParams = replicate (tyRank ty) (var "Int64")
       returnType  = ptr (var . typeRawName $ ty)
   in  generateFFIImport haskName cName (arrayType:shapeParams) returnType
 
-arrayFreeCall :: FutharkType -> HsExpr'
-arrayFreeCall ty =
+arrayCallFree :: FutharkType -> HsExpr'
+arrayCallFree ty =
   let haskName    = apiNameFree ty
-      cName       = freeCName   ty
+      cName       = cNameFree   ty
       inputType   = ptr (var . typeRawName $ ty)
       returnType  = var "Int"
   in  generateFFIImport haskName cName [inputType] returnType
 
-arrayValuesCall :: FutharkType -> HsExpr'
-arrayValuesCall ty =
+arrayCallValues :: FutharkType -> HsExpr'
+arrayCallValues ty =
   let haskName    = apiNameValues ty
-      cName       = valuesCName   ty
+      cName       = cNameValues   ty
       inputType   = ptr (var . typeRawName $ ty)
       outputType  = ptr (var . up . futPrimToHask . tyElem $ ty)
       returnType  = var "Int"
   in  generateFFIImport haskName cName [inputType, outputType] returnType
 
-arrayShapeCall :: FutharkType -> HsExpr'
-arrayShapeCall ty =
+arrayCallShape :: FutharkType -> HsExpr'
+arrayCallShape ty =
   let haskName    = apiNameShape ty
-      cName       = shapeCName   ty
+      cName       = cNameShape   ty
       inputTypes  = ptr (var . typeRawName $ ty)
       returnType  = ptr (var "Int64")
   in  generateFFIImport haskName cName [inputTypes] returnType
 
-opaqueFreeCall :: FutharkType -> HsExpr'
-opaqueFreeCall ty =
+opaqueCallFree :: FutharkType -> HsExpr'
+opaqueCallFree ty =
   let haskName   = apiNameFree ty
-      cName      = freeCName   ty
+      cName      = cNameFree   ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    ]
       returnType = (var "Int")
   in  generateFFIImport haskName cName inputTypes returnType
 
-opaqueStoreCall :: FutharkType -> HsExpr'
-opaqueStoreCall ty =
+opaqueCallStore :: FutharkType -> HsExpr'
+opaqueCallStore ty =
   let haskName    = apiNameStore ty
-      cName       = storeCName   ty
+      cName       = cNameStore   ty
       inputTypes = [ ptr (var . typeRawName $ ty)
                    , ptrs 2 (var "()")
                    , ptr (var "CSize")
@@ -71,10 +71,10 @@ opaqueStoreCall ty =
       returnType = (var "Int")
   in  generateFFIImport haskName cName inputTypes returnType
 
-opaqueRestoreCall :: FutharkType -> HsExpr'
-opaqueRestoreCall ty =
+opaqueCallRestore :: FutharkType -> HsExpr'
+opaqueCallRestore ty =
   let haskName   = apiNameRestore ty
-      cName      = restoreCName   ty
+      cName      = cNameRestore   ty
       inputTypes = [ptr (var "()")]
       returnType = ptr (var . typeRawName $ ty)
   in  generateFFIImport haskName cName inputTypes returnType
@@ -83,15 +83,15 @@ foreignTypeOpDeclarationSet :: FutharkType -> [HsExpr']
 foreignTypeOpDeclarationSet ty =
     case ty of
       Array {} ->
-        [ arrayNewCall    ty
-        , arrayFreeCall   ty
-        , arrayValuesCall ty
-        , arrayShapeCall  ty
+        [ arrayCallNew    ty
+        , arrayCallFree   ty
+        , arrayCallValues ty
+        , arrayCallShape  ty
         ]
       Opaque {} ->
-        [ opaqueFreeCall    ty
-        , opaqueStoreCall   ty
-        , opaqueRestoreCall ty
+        [ opaqueCallFree    ty
+        , opaqueCallStore   ty
+        , opaqueCallRestore ty
         ]
 
 addPtrToNonPrim :: (FutharkType -> HsType') -> FutharkType -> HsType'
