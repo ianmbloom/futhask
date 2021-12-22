@@ -114,6 +114,20 @@ declareArray ty =
         , funBind "valuesFA" $ match [] $ qualRawValues
         ]
 
+mightApplySkolem :: (FutharkType -> HsType') -> FutharkType -> HsType'
+mightApplySkolem f ty =
+  let v = f $ ty
+  in  if isPrim ty
+      then v
+      else v @@ var "c"
+
+mightBeLinearInput :: (FutharkType -> HsType') -> FutharkType -> HsType'
+mightBeLinearInput f ty =
+  let v = f $ ty
+  in  if isPrim ty
+      then v
+      else v @@ var "%1"
+      
 type LayerOp = [PName] -> [PName] -> ([Stmt'],[Stmt'])
 
 foldLayers :: [a -> a] -> a -> a

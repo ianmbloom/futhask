@@ -20,13 +20,6 @@ mightFutharkPrefix f ty =
   then f ty
   else "futark_" <> f ty
 
-mightApplySkolem :: (FutharkType -> RdrNameStr) -> FutharkType -> HsType'
-mightApplySkolem f ty =
-  let v = var . f $ ty
-  in  if isPrim ty
-      then v
-      else v @@ var "c"
-
 mightOpaque :: (FutharkType -> String) -> FutharkType -> String
 mightOpaque f ty =
   case ty of
