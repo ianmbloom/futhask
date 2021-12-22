@@ -9,24 +9,24 @@ typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
     wrapFO :: MVar Int -> ForeignPtr raw -> wrapped c
     freeFO :: Ptr Raw.Futhark_context -> Ptr raw -> IO Int
-    fromFO :: wrapped c -> (MVar Int, ForeignPtr raw)
+    fromFO :: wrapped c %1 -> (MVar Int, ForeignPtr raw)
 
-withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
+withFO :: FutharkObject wrapped raw => wrapped c %1 -> (Ptr raw -> IO b) -> IO b
 withFO = withForeignPtr . snd . fromFO
 
-addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
-addReferenceFO fo = liftIO $
-    let (referenceCounter, _) = fromFO fo
-     in modifyMVar_ referenceCounter (\r -> pure (r+1))
-
-finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
-finalizeFO fo = liftIO $
+addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c %1 -> FutT c m (wrapped c)
+addReferenceFO fo =
     let (referenceCounter, pointer) = fromFO fo
-     in modifyMVar_ referenceCounter (\r
-     -> if r > 0
-            then pure (r-1)
-            else finalizeForeignPtr pointer >> pure 0)
+    in  do liftSystemIO $ modifyMVar_ referenceCounter (\r -> pure (r+1))
+           return $ wrapFO referenceCounter pointer
 
+finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c %1 -> FutT c m ()
+finalizeFO fo =
+    let (referenceCounter, pointer) = fromFO fo
+    in  liftSystemIO $ modifyMVar_ referenceCounter (\r ->
+          if r > 0
+          then pure (r-1)
+          else finalizeForeignPtr pointer >> pure 0)
 
 class (FutharkObject array rawArray, Storable element, M.Index dim)
     => FutharkArray array rawArray dim element
@@ -40,7 +40,8 @@ class Input fo ho where
     toFuthark :: Monad m => ho -> FutT c m (fo c)
 
 class Output fo ho where
-    fromFuthark :: Monad m => fo c -> FutT c m ho
+    fromFuthark     :: Monad m => fo c %1 -> FutT c m ho
+    copyFromFuthark :: Monad m => fo c %1 -> FutT c m (ho, fo c)
 
 |]
 
@@ -207,7 +208,7 @@ instance MonadTrans (FutT c) where
     {-# INLINEABLE lift #-}
 
 instance Functor m => Functor (FutT c m) where
-    fmap f (FutT a) = FutT (fmap f.a)
+    fmap f (FutT a) = FutT (fmap f . a)
     {-# INLINEABLE fmap #-}
 
 instance Applicative m => Applicative (FutT c m) where
@@ -224,30 +225,30 @@ instance MonadIO m => MonadIO (FutT c m) where
    liftIO = lift . liftIO
    {-# INLINEABLE liftIO #-}
 
-instance (MonadBase b m) => MonadBase b (FutT c m) where
-    liftBase = liftBaseDefault
-    {-# INLINEABLE liftBase #-}
-
-instance MonadTransControl (FutT c) where
-    type StT (FutT c) a = a
-    liftWith a = FutT (\c -> a (\(FutT a') -> a' c))
-    restoreT = lift
-    {-# INLINEABLE liftWith #-}
-    {-# INLINEABLE restoreT #-}
-
-instance MonadBaseControl b m => MonadBaseControl b (FutT c m) where
-    type StM (FutT c m) a = ComposeSt (FutT c) m a
-    liftBaseWith = defaultLiftBaseWith
-    restoreM = defaultRestoreM
-    {-# INLINEABLE liftBaseWith #-}
-    {-# INLINEABLE restoreM #-}
+-- instance (MonadBase b m) => MonadBase b (FutT c m) where
+--     liftBase = liftBaseDefault
+--     {-# INLINEABLE liftBase #-}
+--
+-- instance MonadTransControl (FutT c) where
+--     type StT (FutT c) a = a
+--     liftWith a = FutT (\c -> a (\(FutT a') -> a' c))
+--     restoreT = lift
+--     {-# INLINEABLE liftWith #-}
+--     {-# INLINEABLE restoreT #-}
+--
+-- instance MonadBaseControl b m => MonadBaseControl b (FutT c m) where
+--     type StM (FutT c m) a = ComposeSt (FutT c) m a
+--     liftBaseWith = defaultLiftBaseWith
+--     restoreM = defaultRestoreM
+--     {-# INLINEABLE liftBaseWith #-}
+--     {-# INLINEABLE restoreM #-}
 
 
 type Fut c = FutT c Identity
 type FutIO c = FutT c IO
 
 mapFutT :: (m a -> n b) -> FutT c m a -> FutT c n b
-mapFutT f (FutT a) = FutT (f.a)
+mapFutT f (FutT a) = FutT (f . a)
 map2FutT :: (m a -> n b -> k c) -> FutT c' m a -> FutT c' n b -> FutT c' k c
 map2FutT f (FutT a) (FutT b) = FutT (\c -> f (a c) (b c))
 
