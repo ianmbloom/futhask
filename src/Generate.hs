@@ -131,14 +131,16 @@ declareEntry entry =
     outParams = futEntryOutParams entry
     entryName :: OccNameStr
     entryName = entryApiName entry
-    outType :: FutharkParameter -> HsType'
-    outType ty = (mightApplySkolem constructorName . pType $ ty)
+    makeInType :: FutharkParameter -> HsType'
+    makeInType ty = (mightBeLinearInput (mightApplySkolem (var . constructorName)) . pType $ ty)
+    makeOutType :: FutharkParameter -> HsType'
+    makeOutType ty = (mightApplySkolem (var . constructorName) . pType $ ty)
     (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName
                     $   [monadConstraint]
-                    ==> foldr1 (-->) (map outType inParams ++
-                        [futTMonad @@ mightTuple (map outType outParams)])
+                    ==> foldr1 (-->) (map makeInType inParams ++
+                        [futTMonad @@ mightTuple (map makeOutType outParams)])
     funcDeclaration :: HsDecl'
     funcDeclaration = funBind entryName . match (map (bvar . up . pName) inParams) $
                           op unsafeLiftFromIO' "$" $
