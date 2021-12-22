@@ -92,7 +92,7 @@ typesHeader backend = haskellHeader
 
 entriesHeader backend = haskellHeader
     []
-    [ "LinearTypes" ]
+    []
     [ Q "Raw" "Raw", Q "Context" "C", N "Fut (FutT)", Q "Fut" "Fut"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
