@@ -118,5 +118,6 @@ exportsHeader backend = haskellHeader
     , N "Config as F hiding (setOption)"
     , N "TypeClasses as F hiding (FutharkObject, FutharkArray)"
     , N "Utils as F"
-    , N "Fut as F" ]
+    , N "Fut as F"
+    , N "Types as F"]
     []

@@ -372,6 +372,10 @@ instance (FutharkArray array rawArray dim element)
                  $ MU.unsafeArrayFromForeignPtr0 M.Seq pointer
                  $ M.Sz1 (M.totalElem shape)
 
+boolToCBool :: Bool -> CBool
+boolToCBool True  = CBool 1
+boolToCBool False = CBool 0
+
 fromFutharkT2 (a, b) = do
     a' <- fromFuthark a
     b' <- fromFuthark b
