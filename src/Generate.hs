@@ -34,7 +34,7 @@ unsafeLiftFromIO'  = var (qual "Fut" "unsafeLiftFromIO")
 monadConstraint    = var "Monad" @@ var "m"
 
 futTMonad :: HsType'
-futTMonad = var "FutT" @@ var "c" @@ var "m"
+futTMonad = var "FutT" @@ var "m"
 return' :: HsExpr'
 return' = var "return"
 
@@ -62,7 +62,7 @@ foreignDataDeclaration ty =
 
 dataDeclaration :: FutharkType -> HsDecl'
 dataDeclaration ty =
-   data' (constructorName $ ty) [bvar "c"]
+   data' (constructorName $ ty) []
          [prefixCon (constructorName $ ty)
             [ field (var (qual "MV" "MVar") @@ var "Int")
             , field (var (qual "F" "ForeignPtr") @@ var (qual "Raw" (typeRawName ty)))
@@ -132,7 +132,7 @@ declareEntry entry =
     entryName :: OccNameStr
     entryName = entryApiName entry
     outType :: FutharkParameter -> HsType'
-    outType ty = (mightApplySkolem constructorName . pType $ ty)
+    outType param = var . constructorName . pType $ param
     (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName

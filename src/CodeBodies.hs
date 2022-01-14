@@ -7,19 +7,19 @@ import Type
 
 typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
-    wrapFO :: MVar Int -> ForeignPtr raw -> wrapped c
+    wrapFO :: MVar Int -> ForeignPtr raw -> wrapped
     freeFO :: Ptr Raw.Futhark_context -> Ptr raw -> IO Int
-    fromFO :: wrapped c -> (MVar Int, ForeignPtr raw)
+    fromFO :: wrapped -> (MVar Int, ForeignPtr raw)
 
-withFO :: FutharkObject wrapped raw => wrapped c -> (Ptr raw -> IO b) -> IO b
+withFO :: FutharkObject wrapped raw => wrapped -> (Ptr raw -> IO b) -> IO b
 withFO = withForeignPtr . snd . fromFO
 
-addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
+addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 addReferenceFO fo = liftIO $
     let (referenceCounter, _) = fromFO fo
      in modifyMVar_ referenceCounter (\r -> pure (r+1))
 
-finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped c -> FutT c m ()
+finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 finalizeFO fo = liftIO $
     let (referenceCounter, pointer) = fromFO fo
      in modifyMVar_ referenceCounter (\r
@@ -37,10 +37,10 @@ class (FutharkObject array rawArray, Storable element, M.Index dim)
         valuesFA :: Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int
 
 class Input fo ho where
-    toFuthark :: Monad m => ho -> FutT c m (fo c)
+    toFuthark :: Monad m => ho -> FutT m fo
 
 class Output fo ho where
-    fromFuthark :: Monad m => fo c -> FutT c m ho
+    fromFuthark :: Monad m => fo -> FutT m ho
 
 |]
 
@@ -200,88 +200,88 @@ inContextWithError context f = do
 
 futBody = [r|
 
-newtype FutT c m a = FutT (Context -> m a)
+newtype FutT m a = FutT (Context -> m a)
 
-instance MonadTrans (FutT c) where
+instance MonadTrans (FutT) where
     lift a = FutT (\_ -> a)
     {-# INLINEABLE lift #-}
 
-instance Functor m => Functor (FutT c m) where
+instance Functor m => Functor (FutT m) where
     fmap f (FutT a) = FutT (fmap f.a)
     {-# INLINEABLE fmap #-}
 
-instance Applicative m => Applicative (FutT c m) where
+instance Applicative m => Applicative (FutT m) where
     pure a = FutT (\_ -> pure a)
     (<*>) (FutT a) (FutT b) = FutT (\c -> a c <*> b c)
     {-# INLINEABLE pure #-}
     {-# INLINEABLE (<*>) #-}
 
-instance Monad m => Monad (FutT c m) where
+instance Monad m => Monad (FutT m) where
     (>>=) (FutT a) f = FutT (\c -> a c >>= (\(FutT b) -> b c) . f)
     {-# INLINEABLE (>>=) #-}
 
-instance MonadIO m => MonadIO (FutT c m) where
+instance MonadIO m => MonadIO (FutT m) where
    liftIO = lift . liftIO
    {-# INLINEABLE liftIO #-}
 
-instance (MonadBase b m) => MonadBase b (FutT c m) where
+instance (MonadBase b m) => MonadBase b (FutT m) where
     liftBase = liftBaseDefault
     {-# INLINEABLE liftBase #-}
 
-instance MonadTransControl (FutT c) where
-    type StT (FutT c) a = a
+instance MonadTransControl (FutT) where
+    type StT (FutT) a = a
     liftWith a = FutT (\c -> a (\(FutT a') -> a' c))
     restoreT = lift
     {-# INLINEABLE liftWith #-}
     {-# INLINEABLE restoreT #-}
 
-instance MonadBaseControl b m => MonadBaseControl b (FutT c m) where
-    type StM (FutT c m) a = ComposeSt (FutT c) m a
+instance MonadBaseControl b m => MonadBaseControl b (FutT m) where
+    type StM (FutT m) a = ComposeSt (FutT) m a
     liftBaseWith = defaultLiftBaseWith
     restoreM = defaultRestoreM
     {-# INLINEABLE liftBaseWith #-}
     {-# INLINEABLE restoreM #-}
 
 
-type Fut c = FutT c Identity
-type FutIO c = FutT c IO
+type Fut = FutT Identity
+type FutIO = FutT IO
 
-mapFutT :: (m a -> n b) -> FutT c m a -> FutT c n b
+mapFutT :: (m a -> n b) -> FutT m a -> FutT n b
 mapFutT f (FutT a) = FutT (f.a)
-map2FutT :: (m a -> n b -> k c) -> FutT c' m a -> FutT c' n b -> FutT c' k c
+map2FutT :: (m a -> n b -> k c) -> FutT m a -> FutT n b -> FutT k c
 map2FutT f (FutT a) (FutT b) = FutT (\c -> f (a c) (b c))
 
 
-runFutTIn :: Context -> (forall c. FutT c m a) -> m a
+runFutTIn :: Context -> (forall c. FutT m a) -> m a
 runFutTIn context (FutT a) = a context
 
-runFutTWith :: [ContextOption] -> (forall c. FutT c m a) -> m a
+runFutTWith :: [ContextOption] -> (forall c. FutT m a) -> m a
 runFutTWith options a
     = unsafePerformIO
     $ getContext options >>= \c -> return $ runFutTIn c a
 runFutT = runFutTWith []
 
-runFutIn :: Context -> (forall c. Fut c a) -> a
+runFutIn :: Context -> Fut a -> a
 runFutIn context a = runIdentity $ runFutTIn context $ a
 
-runFutWith :: [ContextOption] -> (forall c. Fut c a) -> a
+runFutWith :: [ContextOption] -> Fut a -> a
 runFutWith options a = runIdentity $ runFutTWith options a
 runFut = runFutWith []
 
-pureFut :: (Monad m) => Fut c a -> FutT c m a
+pureFut :: (Monad m) => Fut a -> FutT m a
 pureFut (FutT a) = FutT (pure . runIdentity . a)
 
-unsafeFromFutIO :: FutIO c a -> Fut c a
+unsafeFromFutIO :: FutIO a -> Fut a
 unsafeFromFutIO (FutT a) = FutT (Identity . unsafePerformIO . a)
 
-unsafeLiftFromIO :: Monad m => (Context -> IO a) -> FutT c m a
+unsafeLiftFromIO :: Monad m => (Context -> IO a) -> FutT m a
 unsafeLiftFromIO a = FutT (pure . unsafePerformIO . a)
 
 |]
 
 wrapBody = [r|
 
-wrapIn :: FutharkObject wrapped raw => Context -> Ptr raw -> IO (wrapped c)
+wrapIn :: FutharkObject wrapped raw => Context -> Ptr raw -> IO wrapped
 wrapIn context@(Context childCount pointer) rawObject = do
     modifyMVar_ childCount (\cc -> return $! (cc+1))
     referenceCounter <- newMVar 0

@@ -41,16 +41,16 @@ The generated code can be split in two main parts, raw and wrapped. The raw inte
 Available context options will depend on backend used.
 
 ### The Fut monad
-To make the wrappers safe, and reduce clutter from explicitly passing around the context, the `Fut` monad is introduced. The `Fut` monad is an environment monad that implicitly passes the context around as necessary. Like the `ST` monad, the `Fut` monad is parameterised by a rigid type variable to prevent references to the context from escaping the monad.
+To make the wrappers safe, and reduce clutter from explicitly passing around the context, the `Fut` monad is introduced. The `Fut` monad is an environment monad that implicitly passes the context around as necessary.
 
 To run computations, the function
 
-    runFutIn :: Context -> (forall c. Fut c a) -> a
+    runFutIn :: Context -> Fut a -> a
 
 is used. Additionally
 
-    runFutWith :: [ContextOption] -> (forall c. Fut c a) -> a
-    runFut :: (forall c. Fut c a) -> a
+    runFutWith :: [ContextOption] -> Fut a -> a
+    runFut :: Fut a -> a
 
 are defined for convienience for cases where the context doesn't need to be reused.
 
