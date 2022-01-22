@@ -202,7 +202,7 @@ futBody = [r|
 
 newtype FutT m a = FutT (Context -> m a)
 
-instance MonadTrans (FutT) where
+instance MonadTrans FutT where
     lift a = FutT (\_ -> a)
     {-# INLINEABLE lift #-}
 
@@ -242,9 +242,18 @@ instance MonadBaseControl b m => MonadBaseControl b (FutT m) where
     {-# INLINEABLE liftBaseWith #-}
     {-# INLINEABLE restoreM #-}
 
-
 type Fut = FutT Identity
 type FutIO = FutT IO
+
+class MonadIO m => MonadFut m where
+    liftFut :: FutIO a -> m a
+
+instance MonadFut FutIO where
+  liftFut = id
+
+instance (MonadFut m) => MonadFut (StateT s m) where
+  liftFut = lift . liftFut
+
 
 mapFutT :: (m a -> n b) -> FutT m a -> FutT n b
 mapFutT f (FutT a) = FutT (f.a)

@@ -36,7 +36,7 @@ rawHeader backend = haskellHeader
 
 typeClassesHeader backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
-    , "freeFO", "fromFO", "withFO", "wrapFO", "finalizeFO"
+    , "freeFO", "fromFO", "withFO", "wrapFO", "addReferenceFO", "finalizeFO"
     , "newFA", "shapeFA", "valuesFA"
     , "Input", "Output"
     , "fromFuthark", "toFuthark" ]
@@ -58,12 +58,12 @@ contextHeader backend = haskellHeader
     [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", N "System.Mem (performGC)"]
 
 futHeader backend = haskellHeader
-    [ "FutT", "Fut", "FutIO"
+    [ "FutT", "Fut", "FutIO", "MonadFut(..)"
     , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
     , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
     [ N "Context", N "Config" ]
-    [ N "System.IO.Unsafe", N "Control.Monad.Base", N "Control.Monad.Trans", N "Control.Monad.Trans.Control", N "Control.Monad.Identity", N "Control.Monad.IO.Class" ]
+    [ N "System.IO.Unsafe", N "Control.Monad.Base", N "Control.Monad.Trans", N "Control.Monad.Trans.Control", N "Control.Monad.Identity", N "Control.Monad.IO.Class",  N "Control.Monad.State" ]
 
 wrapHeader backend = haskellHeader
     []
@@ -116,7 +116,7 @@ exportsHeader backend = haskellHeader
     []
     [ N "Context as F"
     , N "Config as F hiding (setOption)"
-    , N "TypeClasses as F hiding (FutharkObject, FutharkArray)"
+    , N "TypeClasses as F"
     , N "Utils as F"
     , N "Fut as F"
     , N "Types as F"]
