@@ -254,6 +254,8 @@ instance MonadFut FutIO where
 instance (MonadFut m) => MonadFut (StateT s m) where
   liftFut = lift . liftFut
 
+instance MonadThrow FutIO where
+  throwM e = lift $ throwM e
 
 mapFutT :: (m a -> n b) -> FutT m a -> FutT n b
 mapFutT f (FutT a) = FutT (f.a)
