@@ -42,6 +42,9 @@ class Input fo ho where
 class Output fo ho where
     fromFuthark :: Monad m => fo -> FutT m ho
 
+class HasShape fo dim where
+    futharkShape :: Monad m => fo -> FutT m (M.Sz dim)
+
 |]
 
 configBody C = [r|
@@ -382,6 +385,15 @@ instance (FutharkArray array rawArray dim element)
           return $ M.resize' shape
                  $ MU.unsafeArrayFromForeignPtr0 M.Seq pointer
                  $ M.Sz1 (M.totalElem shape)
+
+instance (FutharkArray array rawArray dim element)
+  => HasShape array dim where
+    futharkShape array = unsafeLiftFromIO $ \context
+      -> inContext context $ \c
+      -> withFO array $ \aP
+      -> do
+          shape <- shapeFA c aP
+          return shape
 
 boolToCBool :: Bool -> CBool
 boolToCBool True  = CBool 1

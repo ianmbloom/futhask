@@ -38,7 +38,7 @@ typeClassesHeader backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
     , "freeFO", "fromFO", "withFO", "wrapFO", "addReferenceFO", "finalizeFO"
     , "newFA", "shapeFA", "valuesFA"
-    , "Input", "Output"
+    , "Input", "Output", "HasShape(..)"
     , "fromFuthark", "toFuthark" ]
     [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
     [ Q "Raw" "Raw", N "Fut" ]
