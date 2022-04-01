@@ -60,6 +60,7 @@ typeClassesHeader backend = haskellHeader
     ]
     [ Q "Raw" "Raw", N "Fut" ]
     ( [ N "Foreign", Q "Data.Massiv.Array" "M"
+      , N "Control.Monad"
       -- , N "Control.Monad.Trans"
       -- , N "Control.Monad.IO.Class"
       , N "Control.Concurrent"
