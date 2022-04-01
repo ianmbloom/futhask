@@ -22,11 +22,12 @@ addReferenceFO fo = liftIO $
 finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 finalizeFO fo = liftIO $
     let (referenceCounter, pointer) = fromFO fo
-     in modifyMVar_ referenceCounter (\r
-     -> if r > 0
-            then pure (r-1)
-            else finalizeForeignPtr pointer >> pure 0)
-
+    in modifyMVar_ referenceCounter (\r
+     -> do if r == 0
+           then finalizeForeignPtr pointer
+           else when (r < 0) $ error $ "finalizing futhark object with less than zero references."
+           return (r-1)
+        )
 
 class (FutharkObject array rawArray, Storable element, M.Index dim)
     => FutharkArray array rawArray dim element
