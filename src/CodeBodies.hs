@@ -41,8 +41,7 @@ class Input fo ho where
     toFuthark :: Monad m => ho -> FutT m fo
 
 class Output fo ho where
-    fromFuthark     :: Monad m => fo c %1 -> FutT c m ho
-    copyFromFuthark :: Monad m => fo c %1 -> FutT c m (ho, fo c)
+    fromFuthark     :: Monad m => fo c -> FutT c m ho
 
 |]
 
