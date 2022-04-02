@@ -114,6 +114,20 @@ declareArray ty =
         , funBind "valuesFA" $ match [] $ qualRawValues
         ]
 
+mightApplySkolem :: (FutharkType -> HsType') -> FutharkType -> HsType'
+mightApplySkolem f ty =
+  let v = f $ ty
+  in  if isPrim ty
+      then v
+      else v @@ var "c"
+
+mightBeLinearInput :: (FutharkType -> HsType') -> FutharkType -> HsType'
+mightBeLinearInput f ty =
+  let v = f $ ty
+  in  if isPrim ty
+      then v
+      else v @@ var "%1"
+
 type LayerOp = [PName] -> [PName] -> ([Stmt'],[Stmt'])
 
 foldLayers :: [a -> a] -> a -> a
@@ -131,14 +145,16 @@ declareEntry entry =
     outParams = futEntryOutParams entry
     entryName :: OccNameStr
     entryName = entryApiName entry
-    outType :: FutharkParameter -> HsType'
-    outType param = var . constructorName . pType $ param
+    makeInType :: FutharkParameter -> HsType'
+    makeInType ty = (mightBeLinearInput (mightApplySkolem (var . constructorName)) . pType $ ty)
+    makeOutType :: FutharkParameter -> HsType'
+    makeOutType ty = (mightApplySkolem (var . constructorName) . pType $ ty)
     (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName
                     $   [monadConstraint]
-                    ==> foldr1 (-->) (map outType inParams ++
-                        [futTMonad @@ mightTuple (map outType outParams)])
+                    ==> foldr1 (-->) (map makeInType inParams ++
+                        [futTMonad @@ mightTuple (map makeOutType outParams)])
     funcDeclaration :: HsDecl'
     funcDeclaration = funBind entryName . match (map (bvar . up . pName) inParams) $
                           op unsafeLiftFromIO' "$" $

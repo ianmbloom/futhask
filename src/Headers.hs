@@ -25,6 +25,16 @@ specific C = []
 specific OpenCL = [N "Control.Parallel.OpenCL (CLMem, CLCommandQueue)"]
 specific Cuda = [N "Foreign.CUDA.Ptr(DevicePtr(..))"]
 
+linearImports =
+  [ N "Control.Functor.Linear"
+  , Q "System.IO.Linear" "Linear"
+  , N "System.IO.Linear hiding (IO)"
+  , N "Control.Monad.IO.Class.Linear"
+  , N "Data.Tuple.Linear"
+  , Q "Prelude" "P"
+  , N "Prelude.Linear hiding (snd)"
+  ]
+
 rawHeader backend = haskellHeader
     []
     [ "ForeignFunctionInterface" ]
@@ -32,7 +42,10 @@ rawHeader backend = haskellHeader
     ( [ N "Data.Int (Int8, Int16, Int32, Int64)"
       , N "Data.Word (Word8, Word16, Word32, Word64)"
       , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..), CFile(..))"
-      , N "Foreign.Ptr (Ptr)" ] ++ specific backend )
+      , N "Foreign.Ptr (Ptr)"
+      ] ++ specific backend
+    )
+
 
 typeClassesHeader backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
@@ -40,10 +53,19 @@ typeClassesHeader backend = haskellHeader
     , "newFA", "shapeFA", "valuesFA"
     , "Input", "Output", "HasShape(..)"
     , "fromFuthark", "toFuthark" ]
-    [ "MultiParamTypeClasses", "FunctionalDependencies", "TypeSynonymInstances" ]
+    [ "MultiParamTypeClasses"
+    , "FunctionalDependencies"
+    , "TypeSynonymInstances"
+    , "NoImplicitPrelude"
+    ]
     [ Q "Raw" "Raw", N "Fut" ]
-    [ N "Foreign", Q "Data.Massiv.Array" "M"
-    , N "Control.Monad.Trans", N "Control.Monad.IO.Class", N "Control.Concurrent" ]
+    ( [ N "Foreign", Q "Data.Massiv.Array" "M"
+      , N "Control.Monad"
+      -- , N "Control.Monad.Trans"
+      -- , N "Control.Monad.IO.Class"
+      , N "Control.Concurrent"
+      ] ++ linearImports
+    )
 
 configHeader backend = haskellHeader
     []
@@ -63,15 +85,15 @@ futHeader backend = haskellHeader
     , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
     [ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
     [ N "Context", N "Config" ]
-    [ N "System.IO.Unsafe"
-    , N "Control.Monad.Base"
-    , N "Control.Monad.Trans"
-    , N "Control.Monad.Trans.Control"
-    , N "Control.Monad.Identity"
-    , N "Control.Monad.IO.Class"
-    , N "Control.Monad.State"
-    , N "Control.Monad.Catch"
-    ]
+    ( [ N "System.IO.Unsafe"
+      , N "Data.Functor.Identity"
+      -- , N "Control.Monad.Base"
+      -- , N "Control.Monad.Trans"
+      -- , N "Control.Monad.Trans.Control"
+      -- , N "Control.Monad.Identity"
+      -- , N "Control.Monad.IO.Class"
+      ] ++ linearImports
+    )
 
 wrapHeader backend = haskellHeader
     []

@@ -41,10 +41,8 @@ class Input fo ho where
     toFuthark :: Monad m => ho -> FutT m fo
 
 class Output fo ho where
-    fromFuthark :: Monad m => fo -> FutT m ho
-
-class HasShape fo dim where
-    futharkShape :: Monad m => fo -> FutT m (M.Sz dim)
+    fromFuthark     :: Monad m => fo c %1 -> FutT c m ho
+    copyFromFuthark :: Monad m => fo c %1 -> FutT c m (ho, fo c)
 
 |]
 
@@ -210,8 +208,8 @@ instance MonadTrans FutT where
     lift a = FutT (\_ -> a)
     {-# INLINEABLE lift #-}
 
-instance Functor m => Functor (FutT m) where
-    fmap f (FutT a) = FutT (fmap f.a)
+instance Functor m => Functor (FutT c m) where
+    fmap f (FutT a) = FutT (fmap f . a)
     {-# INLINEABLE fmap #-}
 
 instance Applicative m => Applicative (FutT m) where
