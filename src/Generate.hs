@@ -31,7 +31,7 @@ peekFree           = var (qual "U" "peekFree"          )
 peekFreeWrapIn     = var (qual "U" "peekFreeWrapIn"    ) @@ var "context"
 inContextWithError = var (qual "C" "inContextWithError")
 unsafeLiftFromIO'  = var (qual "Fut" "unsafeLiftFromIO")
-monadConstraint    = var "Monad" @@ var "m"
+monadConstraint    = var "MonadIO" @@ var "m"
 
 futTMonad :: HsType'
 futTMonad = var "FutT" @@ var "m"

@@ -102,8 +102,8 @@ futHeader useLinear backend =
     haskellHeader
     [ "FutT", "Fut", "FutIO", "MonadFut(..)"
     , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
-    , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
-    ([ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
+    , "unsafeFromFutIO", "unsafeLiftFromIO" ]
+    ([ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses", "ScopedTypeVariables" ]
      ++ if useLinear then ["NoImplicitPrelude", "LinearTypes", "ApplicativeDo"] else []
     )
     [ N "Context", N "Config" ]
@@ -142,6 +142,7 @@ entriesHeader backend = haskellHeader
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     [ N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)"
+    , N "Control.Monad.IO.Class"
     , Q "Foreign" "F", N "Foreign.C.Types" ]
 
 utilsHeader backend = haskellHeader
