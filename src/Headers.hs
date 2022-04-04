@@ -25,6 +25,21 @@ specific C = []
 specific OpenCL = [N "Control.Parallel.OpenCL (CLMem, CLCommandQueue)"]
 specific Cuda = [N "Foreign.CUDA.Ptr(DevicePtr(..))"]
 
+nonLinearImports :: [Import]
+nonLinearImports =
+  [ N "Control.Monad.Base"
+  , N "Control.Monad.Trans"
+  , N "Control.Monad.State"
+  , N "Control.Monad.Catch"
+  , N "Control.Monad.Trans.Control"
+  , N "Control.Monad.Trans.Class"
+  , N "Control.Monad.Identity"
+  , N "Control.Monad.IO.Class"
+  , N "System.IO.Unsafe"
+  , N "Data.Functor.Identity"
+  ]
+
+linearImports :: [Import]
 linearImports =
   [ N "Control.Functor.Linear"
   , Q "System.IO.Linear" "Linear"
@@ -32,8 +47,15 @@ linearImports =
   , N "Control.Monad.IO.Class.Linear"
   , N "Data.Tuple.Linear"
   , Q "Prelude" "P"
+  , Q "System.IO.Unsafe" "P"
+  , Q "Data.Functor.Identity" "P"
   , N "Prelude.Linear hiding (snd)"
+  , N "Control.Monad.Base"
+  , N "Control.Monad.Catch"
   ]
+
+monadImports :: Bool -> [Import]
+monadImports useLinear = if useLinear then linearImports else nonLinearImports
 
 rawHeader backend = haskellHeader
     []
@@ -47,24 +69,21 @@ rawHeader backend = haskellHeader
     )
 
 
-typeClassesHeader backend = haskellHeader
+typeClassesHeader useLinear backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
     , "freeFO", "fromFO", "withFO", "wrapFO", "addReferenceFO", "finalizeFO"
     , "newFA", "shapeFA", "valuesFA"
     , "Input", "Output", "HasShape(..)"
     , "fromFuthark", "toFuthark" ]
-    [ "MultiParamTypeClasses"
-    , "FunctionalDependencies"
-    , "TypeSynonymInstances"
-    , "NoImplicitPrelude"
-    ]
+    ([ "MultiParamTypeClasses"
+     , "FunctionalDependencies"
+     , "TypeSynonymInstances"
+     ] ++ if useLinear then ["NoImplicitPrelude"] else []
+    )
     [ Q "Raw" "Raw", N "Fut" ]
     ( [ N "Foreign", Q "Data.Massiv.Array" "M"
-      , N "Control.Monad"
-      -- , N "Control.Monad.Trans"
-      -- , N "Control.Monad.IO.Class"
       , N "Control.Concurrent"
-      ] ++ linearImports
+      ] ++ monadImports useLinear
     )
 
 configHeader backend = haskellHeader
@@ -79,20 +98,17 @@ contextHeader backend = haskellHeader
     [Q "Raw" "Raw", N "Config" ]
     [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", N "System.Mem (performGC)"]
 
-futHeader backend = haskellHeader
+futHeader useLinear backend =
+    haskellHeader
     [ "FutT", "Fut", "FutIO", "MonadFut(..)"
     , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
     , "mapFutT", "map2FutT", "pureFut", "unsafeFromFutIO", "unsafeLiftFromIO" ]
-    [ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
+    ([ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses" ]
+     ++ if useLinear then ["NoImplicitPrelude", "LinearTypes", "ApplicativeDo"] else []
+    )
     [ N "Context", N "Config" ]
-    ( [ N "System.IO.Unsafe"
-      , N "Data.Functor.Identity"
-      -- , N "Control.Monad.Base"
-      -- , N "Control.Monad.Trans"
-      -- , N "Control.Monad.Trans.Control"
-      -- , N "Control.Monad.Identity"
-      -- , N "Control.Monad.IO.Class"
-      ] ++ linearImports
+    ( [
+      ] ++ monadImports useLinear
     )
 
 wrapHeader backend = haskellHeader
@@ -104,7 +120,6 @@ wrapHeader backend = haskellHeader
     , "UndecidableInstances" ]
     [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses" ]
     [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
-
     , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", N "Control.Concurrent" ]
 
 typesHeader backend = haskellHeader

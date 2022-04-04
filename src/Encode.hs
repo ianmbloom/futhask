@@ -43,7 +43,7 @@ haskellInstanceDeclarations types =
   unlines <$>
   mapM encodeGHC (concatMap instanceDeclaration types)
 
-haskellEntryDeclarations :: [FutharkEntry] -> IO String
-haskellEntryDeclarations entries =
+haskellEntryDeclarations :: Bool -> Bool -> [FutharkEntry] -> IO String
+haskellEntryDeclarations useLinear useSkolem entries =
    unlines <$>
-   mapM encodeGHC (concatMap declareEntry entries)
+   mapM encodeGHC (concatMap (declareEntry useLinear useSkolem) entries)

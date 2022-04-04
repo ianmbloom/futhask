@@ -41,7 +41,10 @@ class Input fo ho where
     toFuthark :: Monad m => ho -> FutT m fo
 
 class Output fo ho where
-    fromFuthark     :: Monad m => fo c -> FutT c m ho
+    fromFuthark     :: Monad m => fo -> FutT m ho
+
+class HasShape fo dim where
+    futharkShape :: Monad m => fo -> FutT m (M.Sz dim)
 
 |]
 
@@ -199,7 +202,86 @@ inContextWithError context f = do
 
 |]
 
-futBody = [r|
+futBody useLinear =
+  if useLinear
+  then
+  [r|
+
+type FutT m = StateT Context m
+
+instance Functor m => Functor (FutT m) where
+    fmap f (FutT a) = FutT (fmap f . a)
+    {-# INLINEABLE fmap #-}
+
+instance Applicative m => Applicative (FutT m) where
+    pure a = FutT (\s -> pure a)
+    (<*>) (FutT a) (FutT b) = FutT (\c -> a c <*> b c)
+    {-# INLINEABLE pure #-}
+    {-# INLINEABLE (<*>) #-}
+
+instance Monad m => Monad (FutT m) where
+    (>>=) (FutT a) f = FutT (\c -> do x <- dup2 c
+                                      let (d,e) = x
+                                      n <- a d
+                                      return ((\(FutT b) -> b e) . f $ n)
+                            )
+    {-# INLINEABLE (>>=) #-}
+
+instance MonadIO m => MonadIO (FutT m) where
+   liftIO = lift . liftIO
+   {-# INLINEABLE liftIO #-}
+
+type Fut = FutT P.Identity
+type FutIO = FutT IO
+
+class MonadIO m => MonadFut m where
+    liftFut :: FutIO a %1 -> m a
+
+instance MonadFut FutIO where
+  liftFut = id
+
+instance (MonadFut m) => MonadFut (StateT s m) where
+  liftFut = lift . liftFut
+
+instance MonadThrow FutIO where
+  throwM e = lift $ throwM e
+
+mapFutT :: (m a -> n b) -> FutT m a -> FutT n b
+mapFutT f (FutT a) = FutT (f.a)
+map2FutT :: (m a -> n b -> k c) -> FutT m a -> FutT n b -> FutT k c
+map2FutT f (FutT a) (FutT b) = FutT (\c -> f (a c) (b c))
+
+
+runFutTIn :: Context %1 -> FutT m a -> m a
+runFutTIn context (FutT a) = a context
+
+runFutTWith :: [ContextOption] -> FutT m a -> m a
+runFutTWith options a
+    = fromSystemIO
+    $ P.unsafePerformIO
+    $ getContext options >>= \c -> return $ runFutTIn c a
+runFutT = runFutTWith []
+
+runFutIn :: Context %1 -> Fut a -> a
+runFutIn context a = P.runIdentity $ runFutTIn context $ a
+
+runFutWith :: [ContextOption] -> Fut a -> a
+runFutWith options a = P.runIdentity $ runFutTWith options a
+runFut = runFutWith []
+
+pureFut :: (Monad m) => Fut a -> FutT m a
+pureFut (FutT a) = FutT (pure . P.runIdentity . a)
+
+unsafeFromFutIO :: FutIO a -> Fut a
+unsafeFromFutIO (FutT a) = FutT (P.Identity . P.unsafePerformIO . a)
+
+unsafeLiftFromIO :: Monad m => (Context %1 -> IO a) -> FutT m a
+unsafeLiftFromIO a = FutT (pure . fromSystemIO . P.unsafePerformIO . a)
+
+|]
+
+  else
+  [r|
 
 newtype FutT m a = FutT (Context -> m a)
 
@@ -207,7 +289,7 @@ instance MonadTrans FutT where
     lift a = FutT (\_ -> a)
     {-# INLINEABLE lift #-}
 
-instance Functor m => Functor (FutT c m) where
+instance Functor m => Functor (FutT m) where
     fmap f (FutT a) = FutT (fmap f . a)
     {-# INLINEABLE fmap #-}
 

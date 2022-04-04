@@ -1,6 +1,7 @@
 module Main where
 
 import System.IO
+import Control.Monad
 import Data.Maybe
 import Data.List (intercalate)
 import qualified Data.Map as M
@@ -46,14 +47,15 @@ showUsage =
 
 main :: IO ()
 main = do
-    putStrLn "Starting futhask version 0.2.2:"
+    putStrLn "Starting futhask version 0.2.3:"
     args <- getArgs
     ([jsonName, srcDir, moduleName],xs) <- getArgs >>= \args -> case args of
-         [a, b, c]:xs -> return (args, xs)
+         a:b:c:xs -> return ([a,b,c], xs)
          _            -> do showUsage; error ""
     let useLinear = case xs of
-          ["-lineartypes"] -> True
+          ["--lineartypes"] -> True
           _ -> False
+    when useLinear $ putStrLn "Using linear types."
     createDirectoryIfMissing False (srcDir ++ "/" ++ moduleName)
     manifest <- readManifest jsonName
     let backend = manifestBackend manifest
@@ -65,20 +67,20 @@ main = do
     instances      <- haskellInstanceDeclarations types
     foreignEntries <- foreignEntryDeclarations    entries
     haskellTypes   <- haskellDataWrappers         types
-    haskellEntries <- haskellEntryDeclarations    entries
+    haskellEntries <- haskellEntryDeclarations useLinear False entries
     mapM_ (writeModule backend srcDir moduleName)
-        [ (Just "Raw"        , rawHeader        ,    commonRawBody
-                                                  ++ rawBody backend
-                                                  ++ dataWrappers
-                                                  ++ foreignEntries
-                                                  ++ typeOps               )
-        , (Just "Entries"    , entriesHeader    , haskellEntries           )
-        , (Just "Types"      , typesHeader      , haskellTypes ++ instances)
-        , (Just "TypeClasses", typeClassesHeader, typeClassesBody          )
-        , (Just "Context"    , contextHeader    , contextBody              )
-        , (Just "Config"     , configHeader     , configBody backend       )
-        , (Just "Fut"        , futHeader        , futBody                  )
-        , (Just "Wrap"       , wrapHeader       , wrapBody                 )
-        , (Just "Utils"      , utilsHeader      , utilsBody                )
+        [ (Just "Raw"        , rawHeader                  ,    commonRawBody
+                                                            ++ rawBody backend
+                                                            ++ dataWrappers
+                                                            ++ foreignEntries
+                                                            ++ typeOps               )
+        , (Just "Entries"    , entriesHeader              , haskellEntries           )
+        , (Just "Types"      , typesHeader                , haskellTypes ++ instances)
+        , (Just "TypeClasses", typeClassesHeader useLinear, typeClassesBody          )
+        , (Just "Context"    , contextHeader              , contextBody              )
+        , (Just "Config"     , configHeader               , configBody backend       )
+        , (Just "Fut"        , futHeader         useLinear, futBody useLinear        )
+        , (Just "Wrap"       , wrapHeader                 , wrapBody                 )
+        , (Just "Utils"      , utilsHeader                , utilsBody                )
         , (Nothing, exportsHeader, "") ]
     putStrLn "Futhask wrapper generation complete."

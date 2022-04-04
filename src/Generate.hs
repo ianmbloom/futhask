@@ -114,17 +114,17 @@ declareArray ty =
         , funBind "valuesFA" $ match [] $ qualRawValues
         ]
 
-mightApplySkolem :: (FutharkType -> HsType') -> FutharkType -> HsType'
-mightApplySkolem f ty =
+mightApplySkolem :: Bool -> (FutharkType -> HsType') -> FutharkType -> HsType'
+mightApplySkolem useSkolem f ty =
   let v = f $ ty
-  in  if isPrim ty
+  in  if isPrim ty || not useSkolem
       then v
       else v @@ var "c"
 
-mightBeLinearInput :: (FutharkType -> HsType') -> FutharkType -> HsType'
-mightBeLinearInput f ty =
+mightBeLinearInput :: Bool -> (FutharkType -> HsType') -> FutharkType -> HsType'
+mightBeLinearInput useLinear f ty =
   let v = f $ ty
-  in  if isPrim ty
+  in  if isPrim ty || not useLinear
       then v
       else v @@ var "%1"
 
@@ -133,8 +133,8 @@ type LayerOp = [PName] -> [PName] -> ([Stmt'],[Stmt'])
 foldLayers :: [a -> a] -> a -> a
 foldLayers layers body = foldr ($) body layers
 
-declareEntry :: FutharkEntry -> [HsDecl']
-declareEntry entry =
+declareEntry :: Bool -> Bool -> FutharkEntry -> [HsDecl']
+declareEntry useLinear useSkolem entry =
   [ typeDeclaration
   , funcDeclaration
   ]
@@ -146,9 +146,9 @@ declareEntry entry =
     entryName :: OccNameStr
     entryName = entryApiName entry
     makeInType :: FutharkParameter -> HsType'
-    makeInType ty = (mightBeLinearInput (mightApplySkolem (var . constructorName)) . pType $ ty)
+    makeInType ty = (mightBeLinearInput useLinear (mightApplySkolem useSkolem (var . constructorName)) . pType $ ty)
     makeOutType :: FutharkParameter -> HsType'
-    makeOutType ty = (mightApplySkolem (var . constructorName) . pType $ ty)
+    makeOutType ty = (mightApplySkolem useSkolem (var . constructorName) . pType $ ty)
     (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName
