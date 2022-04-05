@@ -213,14 +213,11 @@ type FutIO = FutT Linear.IO
 class MonadIO m => MonadFut m where
     liftFut :: FutIO a %1 -> m a
 
-instance MonadFut FutIO where
-  liftFut = id
-
 instance (MonadFut m) => MonadFut (StateT s m) where
   liftFut = lift . liftFut
 
-instance MonadThrow FutIO where
-  throwM e = lift $ throwM e
+instance {-# OVERLAPPING #-} MonadFut FutIO where
+  liftFut = id
 
 runFutTIn :: Monad m => Context -> FutT m a -> m a
 runFutTIn context f = do (x, context') <- runStateT f context
@@ -254,14 +251,11 @@ type FutIO = FutT IO
 class MonadIO m => MonadFut m where
     liftFut :: FutIO a -> m a
 
-instance MonadFut FutIO where
-  liftFut = id
-
 instance (MonadFut m) => MonadFut (StateT s m) where
   liftFut = lift . liftFut
 
-instance MonadThrow FutIO where
-  throwM e = lift $ throwM e
+instance {-# OVERLAPPING #-} MonadFut FutIO where
+  liftFut = id
 
 runFutTIn :: Monad m => Context -> FutT m a -> m a
 runFutTIn context a = evalStateT a context
@@ -307,13 +301,13 @@ wrapIn context@(Context childCount pointer) rawObject = do
     where freeCall = (inContextWithError context $ \c -> freeFO c rawObject)
                   >> modifyMVar_ childCount (\cc -> return $! (cc-1))
 
-peekFree :: x
+peekFree :: (Storable b) => Ptr b -> IO b
 peekFree p = do
    pPeeked <- peek p
    free p
    return pPeeked
 
-peekFreeWrapIn :: y
+peekFreeWrapIn :: (FutharkObject b raw) => Context -> Ptr (Ptr raw) -> IO b
 peekFreeWrapIn context rawP = do
    rawPeeked <- peek rawP
    wrapped <- wrapIn context rawPeeked
