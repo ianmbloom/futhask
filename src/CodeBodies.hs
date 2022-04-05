@@ -321,10 +321,19 @@ wrapIn context@(Context childCount pointer) rawObject = do
     where freeCall = (inContextWithError context $ \c -> freeFO c rawObject)
                   >> modifyMVar_ childCount (\cc -> return $! (cc-1))
 
-peekFree p = peek p >>= \v -> free p >> return v
-peekFreeWrapIn context rawP
-    = peek rawP >>= wrapIn context >>= \fo -> F.free rawP >> return fo
+peekFree :: x
+peekFree p = do
+   pPeeked <- peek p
+   free p
+   return pPeeked
 
+peekFreeWrapIn :: y
+peekFreeWrapIn context rawP = do
+   rawPeeked <- peek rawP
+   wrapped <- wrapIn context rawPeeked
+   F.free rawP
+   return wrapped
+   
 -- Ptr - Dim conversion
 
 to1d f cP aP
