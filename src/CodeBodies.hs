@@ -208,7 +208,6 @@ futBody useLinear =
   [r|
 
 type FutT m = StateT Context m
-type Fut = FutT P.Identity
 type FutIO = FutT Linear.IO
 
 class MonadIO m => MonadFut m where
@@ -224,7 +223,7 @@ instance MonadThrow FutIO where
   throwM e = lift $ throwM e
 
 runFutTIn :: Monad m => Context -> FutT m a -> m a
-runFutTIn context a = do (x, context') <- runStateT a context
+runFutTIn context f = do (x, context') <- runStateT f context
                          return x
 
 runFutInside :: (Monad m0, Monad m1) => FutT m1 a -> Context %1 -> m0 (m1 a)
@@ -237,20 +236,6 @@ runFutTWith options a
     $ getContext options >>= runFutInside a
 runFutT :: Monad m => FutT m a -> m a
 runFutT = runFutTWith []
-
-runFutIn :: Context -> Fut a -> a
-runFutIn context a = runIdentity $ runFutTIn context $ a
-
-runFutWith :: [ContextOption] -> Fut a -> a
-runFutWith options a = runIdentity $ runFutTWith options a
-runFut = runFutWith []
-
-unsafeFromFutIO :: forall a . FutIO a -> Fut a
-unsafeFromFutIO a = do
-  context <- get
-  let (x, context') = P.unsafePerformIO $ (runStateT a context :: IO (a, Context))
-  put context'
-  return x
 
 unsafeLiftFromIO :: forall a m . (MonadIO m) => (Context %1 -> IO a) %1 -> FutT m a
 unsafeLiftFromIO a = do
@@ -333,7 +318,7 @@ peekFreeWrapIn context rawP = do
    wrapped <- wrapIn context rawPeeked
    F.free rawP
    return wrapped
-   
+
 -- Ptr - Dim conversion
 
 to1d f cP aP
