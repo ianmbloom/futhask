@@ -237,12 +237,13 @@ runFutTWith options a
 runFutT :: Monad m => FutT m a -> m a
 runFutT = runFutTWith []
 
-unsafeLiftFromIO :: forall a m . (MonadIO m) => (Context %1 -> IO a) %1 -> FutT m a
+unsafeLiftFromIO :: forall a m . (MonadIO m) => (Context %1 -> Linear.IO a) -> FutT m a
 unsafeLiftFromIO a = do
   context <- get
-  x <- liftIO (a context :: IO a)
+  x <- liftIO (a context :: Linear.IO a)
   put context
   return x
+
 |]
   else
   [r|
