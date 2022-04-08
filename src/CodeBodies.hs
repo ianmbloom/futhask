@@ -5,6 +5,9 @@ module CodeBodies where
 import Text.RawString.QQ
 import Type
 
+-- withFO :: FutharkObject wrapped raw => wrapped -> (Ptr raw -> IO b) -> IO b
+-- withFO = withForeignPtr . snd . fromFO
+
 typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
     wrapFO :: MVar Int -> ForeignPtr raw -> wrapped
@@ -12,7 +15,18 @@ class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
     fromFO :: wrapped -> (MVar Int, ForeignPtr raw)
 
 withFO :: FutharkObject wrapped raw => wrapped -> (Ptr raw -> IO b) -> IO b
-withFO = withForeignPtr . snd . fromFO
+withFO fo f = do
+  let (mCounter, ptr) = fromFO fo
+  counter <- readMVar mCounter
+  if counter >= 0
+  then withForeignPtr ptr f
+  else error $ "withFO on object with < zero references."
+
+debugFO :: FutharkObject wrapped raw => wrapped -> IO ()
+debugFO fo = do
+  let (mCounter, ptr) = fromFO fo
+  counter <- readMVar mCounter
+  putStrLn $ show counter
 
 addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 addReferenceFO fo = liftIO $

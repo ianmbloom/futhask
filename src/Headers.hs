@@ -71,7 +71,8 @@ rawHeader backend = haskellHeader
 
 typeClassesHeader useLinear backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
-    , "freeFO", "fromFO", "withFO", "wrapFO", "addReferenceFO", "finalizeFO"
+    , "freeFO", "fromFO", "withFO", "wrapFO"
+    , "addReferenceFO", "finalizeFO", "debugFO"
     , "newFA", "shapeFA", "valuesFA"
     , "Input", "Output", "HasShape(..)"
     , "fromFuthark", "toFuthark" ]
