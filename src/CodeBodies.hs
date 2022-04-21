@@ -22,11 +22,11 @@ withFO fo f = do
   then withForeignPtr ptr f
   else error $ "withFO on object with < zero references."
 
-debugFO :: FutharkObject wrapped raw => wrapped -> IO ()
+debugFO :: FutharkObject wrapped raw => wrapped -> IO Int
 debugFO fo = do
   let (mCounter, ptr) = fromFO fo
   counter <- readMVar mCounter
-  putStrLn $ show counter
+  return counter
 
 addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
 addReferenceFO fo = liftIO $
