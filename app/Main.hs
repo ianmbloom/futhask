@@ -47,7 +47,7 @@ showUsage =
 
 main :: IO ()
 main = do
-    putStrLn "Starting futhask version 0.2.3:"
+    putStrLn "Starting futhask version 0.2.4:"
     args <- getArgs
     ([jsonName, srcDir, moduleName],xs) <- getArgs >>= \args -> case args of
          a:b:c:xs -> return ([a,b,c], xs)
