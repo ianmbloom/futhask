@@ -125,6 +125,7 @@ data ContextOption
     | DefaultTileSize Int
     | DefaultThreshold Int
     | Size String CSize
+    | CacheFile String
 
 setOption config option = case option of
     (NvrtcOptions os)    -> mapM_ (\o -> withCString o $ Raw.context_config_add_nvrtc_option config) os
@@ -143,6 +144,7 @@ setOption config option = case option of
                                            >>= \code -> if code == 0
                                                            then return ()
                                                            else error "invalid size"
+    (CacheFile s)          -> withCString s $ Raw.futhark_context_config_set_cache_file       config
 |]
 
 contextBody = [r|

@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           futhask
-version:        0.2.0
+version:        0.2.4
 synopsis:       Generate Haskell wrappers for Futhark libraries
 description:    Please see the README on GitLab at <https://gitlab.com/Gusten_Isfeldt/futhask#futhask>
 category:       FFI Tools
@@ -41,7 +41,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      aeson >=1.5.6.0
+      aeson
     , attoparsec
     , base
     , base-compat
@@ -67,7 +67,7 @@ executable futhask
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson >=1.5.6.0
+      aeson
     , attoparsec
     , base
     , base-compat

@@ -63,6 +63,11 @@ foreign import ccall unsafe "futhark_context_sync"
   context_sync
     :: Ptr Futhark_context
     -> IO Int
+foreign import ccall unsafe "futhark_context_config_set_cache_file"
+  futhark_context_config_set_cache_file
+    :: Ptr Futhark_context_config
+    -> Ptr CChar
+    -> IO ()
 foreign import ccall unsafe "futhark_context_report"
   context_report
     :: Ptr Futhark_context
