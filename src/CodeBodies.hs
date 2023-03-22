@@ -8,6 +8,11 @@ import Type
 -- withFO :: FutharkObject wrapped raw => wrapped -> (Ptr raw -> IO b) -> IO b
 -- withFO = withForeignPtr . snd . fromFO
 
+applyDebug :: Bool -> Char -> String
+applyDebug debugMode c = case c of
+                           'r' -> if debugMode then [r|HasCallStack =>|] else []
+                           _ -> [c]
+
 typeClassesBody = [r|
 class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
     wrapFO :: MVar Int -> ForeignPtr raw -> wrapped

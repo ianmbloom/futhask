@@ -31,19 +31,19 @@ foreignTypeOpDeclarations types =
 foreignEntryDeclarations :: [FutharkEntry] -> IO String
 foreignEntryDeclarations entries =
   unlines . map (drop 2) <$>
-  mapM encodeGHC (map foreignEntryDeclaration entries)
+  mapM (encodeGHC . foreignEntryDeclaration) entries
 
 haskellDataWrappers :: [FutharkType] -> IO String
 haskellDataWrappers types =
   unlines <$>
-  mapM encodeGHC ( map dataDeclaration types)
+  mapM (encodeGHC . dataDeclaration) types
 
 haskellInstanceDeclarations :: [FutharkType] -> IO String
 haskellInstanceDeclarations types =
   unlines <$>
   mapM encodeGHC (concatMap instanceDeclaration types)
 
-haskellEntryDeclarations :: Bool -> Bool -> [FutharkEntry] -> IO String
-haskellEntryDeclarations useLinear useSkolem entries =
+haskellEntryDeclarations :: Bool -> Bool -> Bool -> [FutharkEntry] -> IO String
+haskellEntryDeclarations useLinear useSkolem debugMode entries =
    unlines <$>
-   mapM encodeGHC (concatMap (declareEntry useLinear useSkolem) entries)
+   mapM encodeGHC (concatMap (declareEntry useLinear useSkolem debugMode) entries)

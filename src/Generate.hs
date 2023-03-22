@@ -25,6 +25,7 @@ peekFreeWrapIn     :: HsExpr'
 inContextWithError :: HsExpr'
 unsafeLiftFromIO'  :: HsExpr'
 monadConstraint    :: HsType'
+calllStackConstraint    :: HsType'
 malloc             = var (qual "F" "malloc")
 withFO             = var (qual "T" "withFO")
 peekFree           = var (qual "U" "peekFree"          )
@@ -32,6 +33,7 @@ peekFreeWrapIn     = var (qual "U" "peekFreeWrapIn"    ) @@ var "context"
 inContextWithError = var (qual "C" "inContextWithError")
 unsafeLiftFromIO'  = var (qual "Fut" "unsafeLiftFromIO")
 monadConstraint    = var "MonadIO" @@ var "m"
+calllStackConstraint = var "HasCallStack"
 
 futTMonad :: HsType'
 futTMonad = var "FutT" @@ var "m"
@@ -133,8 +135,8 @@ type LayerOp = [PName] -> [PName] -> ([Stmt'],[Stmt'])
 foldLayers :: [a -> a] -> a -> a
 foldLayers layers body = foldr ($) body layers
 
-declareEntry :: Bool -> Bool -> FutharkEntry -> [HsDecl']
-declareEntry useLinear useSkolem entry =
+declareEntry :: Bool -> Bool -> Bool -> FutharkEntry -> [HsDecl']
+declareEntry useLinear useSkolem debugMode entry =
   [ typeDeclaration
   , funcDeclaration
   ]
@@ -146,13 +148,13 @@ declareEntry useLinear useSkolem entry =
     entryName :: OccNameStr
     entryName = entryApiName entry
     makeInType :: FutharkParameter -> HsType'
-    makeInType ty = (mightBeLinearInput useLinear (mightApplySkolem useSkolem (var . constructorName)) . pType $ ty)
+    makeInType = mightBeLinearInput useLinear (mightApplySkolem useSkolem (var . constructorName)) . pType
     makeOutType :: FutharkParameter -> HsType'
-    makeOutType ty = (mightApplySkolem useSkolem (var . constructorName) . pType $ ty)
+    makeOutType = mightApplySkolem useSkolem (var . constructorName) . pType
     (call, postCall) = entryParts entry
     typeDeclaration :: HsDecl'
     typeDeclaration =   typeSig entryName
-                    $   [monadConstraint]
+                    $   (monadConstraint : [calllStackConstraint | debugMode])
                     ==> foldr1 (-->) (map makeInType inParams ++
                         [futTMonad @@ mightTuple (map makeOutType outParams)])
     funcDeclaration :: HsDecl'
@@ -160,7 +162,7 @@ declareEntry useLinear useSkolem entry =
                           op unsafeLiftFromIO' "$" $
                           lambda [bvar "context"] $
                           withFOLayers inParams $
-                          (do' (call ++ postCall))
+                          do' (call ++ postCall)
 
 entryParts :: FutharkEntry -> ([Stmt'], [Stmt'])
 entryParts entry = appliedLayers [] []
@@ -179,7 +181,7 @@ entryParts entry = appliedLayers [] []
                          )
     returnOut :: [PName] -> Stmt'
     returnOut outs = stmt $
-                     return' @@ (mightTuple $ (map (bvar . up . prime) outs :: [HsExpr']))
+                     return' @@ mightTuple (map (bvar . up . prime) outs :: [HsExpr'])
     coreBodies :: LayerOp
     coreBodies ins outs = ([applyEntry ins outs], [returnOut outs])
     inLayers :: [LayerOp -> LayerOp]
