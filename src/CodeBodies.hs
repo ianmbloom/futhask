@@ -8,13 +8,18 @@ import Type
 -- withFO :: FutharkObject wrapped raw => wrapped -> (Ptr raw -> IO b) -> IO b
 -- withFO = withForeignPtr . snd . fromFO
 
-typeClassesBody = [r|
-class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
-    wrapFO :: MVar Int -> ForeignPtr raw -> wrapped
-    freeFO :: Ptr Raw.Futhark_context -> Ptr raw -> IO Int
-    fromFO :: wrapped -> (MVar Int, ForeignPtr raw)
+applyDebug :: Bool -> Char -> String
+applyDebug debugMode c = case c of
+                           '⍝' -> if debugMode then [r|HasCallStack|] else []
+                           _ -> [c]
 
-withFO :: FutharkObject wrapped raw => wrapped -> (Ptr raw -> IO b) -> IO b
+typeClassesBody debugMode = [r|
+class FutharkObject wrapped raw | wrapped -> raw, raw -> wrapped where
+    wrapFO :: (⍝) => MVar Int -> ForeignPtr raw -> wrapped
+    freeFO :: (⍝) => Ptr Raw.Futhark_context -> Ptr raw -> IO Int
+    fromFO :: (⍝) => wrapped -> (MVar Int, ForeignPtr raw)
+
+withFO :: (FutharkObject wrapped raw, (⍝)) => wrapped -> (Ptr raw -> IO b) -> IO b
 withFO fo f = do
   let (mCounter, ptr) = fromFO fo
   counter <- readMVar mCounter
@@ -22,18 +27,18 @@ withFO fo f = do
   then withForeignPtr ptr f
   else error $ "withFO on object with < zero references."
 
-debugFO :: FutharkObject wrapped raw => wrapped -> IO Int
+debugFO :: (FutharkObject wrapped raw, (⍝)) => wrapped -> IO Int
 debugFO fo = do
   let (mCounter, ptr) = fromFO fo
   counter <- readMVar mCounter
   return counter
 
-addReferenceFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
+addReferenceFO :: (MonadIO m, FutharkObject wrapped raw, (⍝)) => wrapped -> FutT m ()
 addReferenceFO fo = liftIO $
     let (referenceCounter, _) = fromFO fo
      in modifyMVar_ referenceCounter (\r -> pure (r+1))
 
-finalizeFO :: (MonadIO m, FutharkObject wrapped raw) => wrapped -> FutT m ()
+finalizeFO :: (MonadIO m, FutharkObject wrapped raw, (⍝)) => wrapped -> FutT m ()
 finalizeFO fo = liftIO $
     let (referenceCounter, pointer) = fromFO fo
     in modifyMVar_ referenceCounter (\r
@@ -47,20 +52,20 @@ class (FutharkObject array rawArray, Storable element, M.Index dim)
     => FutharkArray array rawArray dim element
     | array -> dim, array -> element
     where
-        shapeFA  :: Ptr Raw.Futhark_context -> Ptr rawArray -> IO (M.Sz dim)
-        newFA    :: Ptr Raw.Futhark_context -> Ptr element -> M.Sz dim -> IO (Ptr rawArray)
-        valuesFA :: Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int
+        shapeFA  :: (⍝) => Ptr Raw.Futhark_context -> Ptr rawArray -> IO (M.Sz dim)
+        newFA    :: (⍝) => Ptr Raw.Futhark_context -> Ptr element -> M.Sz dim -> IO (Ptr rawArray)
+        valuesFA :: (⍝) => Ptr Raw.Futhark_context -> Ptr rawArray -> Ptr element -> IO Int
 
 class Input fo ho where
-    toFuthark :: MonadIO m => ho -> FutT m fo
-
-class Output fo ho where
-    fromFuthark     :: MonadIO m => fo -> FutT m ho
+    toFuthark :: (MonadIO m, (⍝)) => ho -> FutT m fo
+                              
+class Output fo ho where      
+    fromFuthark     :: (MonadIO m, (⍝)) => fo -> FutT m ho
 
 class HasShape fo dim where
-    futharkShape :: MonadIO m => fo -> FutT m (M.Sz dim)
+    futharkShape :: (MonadIO m, (⍝)) => fo -> FutT m (M.Sz dim)
 
-|]
+|] >>= applyDebug debugMode
 
 configBody C = [r|
 data ContextOption
@@ -147,10 +152,10 @@ setOption config option = case option of
     (CacheFile s)          -> withCString s $ Raw.futhark_context_config_set_cache_file       config
 |]
 
-contextBody = [r|
+contextBody debugMode = [r|
 data Context = Context (MVar Int) (ForeignPtr Raw.Futhark_context)
 
-getContext :: [ContextOption] -> IO Context
+getContext :: (⍝) => [ContextOption] -> IO Context
 getContext options = do
     config <- Raw.context_config_new
     mapM_ (setOption config) options
@@ -161,7 +166,7 @@ getContext options = do
         $ (forkIO $ freeContext childCount config context)
         >> return ()
 
-freeContext :: MVar Int
+freeContext :: (⍝) => MVar Int
             -> Ptr Raw.Futhark_context_config
             -> Ptr Raw.Futhark_context
             -> IO ()
@@ -172,34 +177,34 @@ freeContext childCount config context
                 Raw.context_config_free config
         else yield >> freeContext childCount config context
 
-inContext :: Context -> (Ptr Raw.Futhark_context -> IO a) -> IO a
+inContext :: (⍝) => Context -> (Ptr Raw.Futhark_context -> IO a) -> IO a
 inContext (Context _ fp) = withForeignPtr fp
 
-getError :: Context -> IO ()
+getError :: (⍝) => Context -> IO ()
 getError context = do
     cs <- inContext context Raw.context_get_error
     s <- peekCString cs
     F.free cs
     error s
 
-clearError :: Context -> IO ()
+clearError :: (⍝) => Context -> IO ()
 clearError context = inContext context Raw.context_get_error >>= F.free
 
-clearCache :: Context -> IO ()
+clearCache :: (⍝) => Context -> IO ()
 clearCache context
     = inContext context Raw.context_clear_caches >>= \code
     -> if code == 0
         then return ()
         else getError context
 
-syncContext :: Context -> IO ()
+syncContext :: (⍝) => Context -> IO ()
 syncContext context
     = inContext context Raw.context_sync >>= \code
     -> if code == 0
         then return ()
         else getError context
 
-inContextWithError :: Context -> (Ptr Raw.Futhark_context -> IO Int) -> IO ()
+inContextWithError :: (⍝) => Context -> (Ptr Raw.Futhark_context -> IO Int) -> IO ()
 inContextWithError context f = do
     code <- attempt
     if code == 0
@@ -216,9 +221,9 @@ inContextWithError context f = do
         success = return ()
         failure = getError context
 
-|]
+|] >>= applyDebug debugMode
 
-futBody useLinear =
+futBody useLinear debugMode =
   if useLinear
   then
   [r|
@@ -227,7 +232,7 @@ type FutT m = StateT Context m
 type FutIO = FutT Linear.IO
 
 class MonadIO m => MonadFut m where
-    liftFut :: FutIO a %1 -> m a
+    liftFut :: (⍝) => FutIO a %1 -> m a
 
 instance (MonadFut m) => MonadFut (StateT s m) where
   liftFut = lift . liftFut
@@ -235,14 +240,14 @@ instance (MonadFut m) => MonadFut (StateT s m) where
 instance {-# OVERLAPPING #-} MonadFut FutIO where
   liftFut = id
 
-runFutTIn :: Monad m => Context -> FutT m a -> m a
+runFutTIn :: (Monad m, (⍝)) => Context -> FutT m a -> m a
 runFutTIn context f = do (x, context') <- runStateT f context
                          return x
 
-runFutInside :: (Monad m0, Monad m1) => FutT m1 a -> Context %1 -> m0 (m1 a)
+runFutInside :: (Monad m0, Monad m1, (⍝)) => FutT m1 a -> Context %1 -> m0 (m1 a)
 runFutInside a c = return $ runFutTIn c a
 
-runFutTWith :: Monad m => [ContextOption] -> FutT m a -> m a
+runFutTWith :: (Monad m, (⍝)) => [ContextOption] -> FutT m a -> m a
 runFutTWith options a
     = fromSystemIO
     $ P.unsafePerformIO
@@ -250,14 +255,14 @@ runFutTWith options a
 runFutT :: Monad m => FutT m a -> m a
 runFutT = runFutTWith []
 
-unsafeLiftFromIO :: forall a m . (MonadIO m) => (Context %1 -> Linear.IO a) -> FutT m a
+unsafeLiftFromIO :: forall a m . (MonadIO m, (⍝)) => (Context %1 -> Linear.IO a) -> FutT m a
 unsafeLiftFromIO a = do
   context <- get
   x <- liftIO (a context :: Linear.IO a)
   put context
   return x
 
-|]
+|] >>= applyDebug debugMode
   else
   [r|
 type FutT m = StateT Context m
@@ -265,50 +270,50 @@ type Fut = FutT Identity
 type FutIO = FutT IO
 
 class MonadIO m => MonadFut m where
-    liftFut :: FutIO a -> m a
+    liftFut :: (⍝) => FutIO a -> m a
 
-instance (MonadFut m) => MonadFut (StateT s m) where
+instance MonadFut m => MonadFut (StateT s m) where
   liftFut = lift . liftFut
 
 instance {-# OVERLAPPING #-} MonadFut FutIO where
   liftFut = id
 
-runFutTIn :: Monad m => Context -> FutT m a -> m a
+runFutTIn :: (Monad m, (⍝)) => Context -> FutT m a -> m a
 runFutTIn context a = evalStateT a context
 
-runFutTWith :: Monad m => [ContextOption] -> FutT m a -> m a
+runFutTWith :: (Monad m, (⍝)) => [ContextOption] -> FutT m a -> m a
 runFutTWith options a
     = unsafePerformIO
     $ getContext options >>= \c -> return $ runFutTIn c a
-runFutT :: Monad m => FutT m a -> m a
+runFutT :: (Monad m, (⍝)) => FutT m a -> m a
 runFutT = runFutTWith []
 
-runFutIn :: Context -> Fut a -> a
+runFutIn :: (⍝) => Context -> Fut a -> a
 runFutIn context a = runIdentity $ runFutTIn context $ a
 
-runFutWith :: [ContextOption] -> Fut a -> a
+runFutWith :: (⍝) => [ContextOption] -> Fut a -> a
 runFutWith options a = runIdentity $ runFutTWith options a
 runFut = runFutWith []
 
-unsafeFromFutIO :: forall a . FutIO a -> Fut a
+unsafeFromFutIO :: forall a . (⍝) => FutIO a -> Fut a
 unsafeFromFutIO a = do
   context <- get
   let (x, context') = unsafePerformIO $ (runStateT a context :: IO (a, Context))
   put context'
   return x
 
-unsafeLiftFromIO :: forall a m . (MonadIO m) => (Context -> IO a) -> FutT m a
+unsafeLiftFromIO :: forall a m . (MonadIO m, (⍝)) => (Context -> IO a) -> FutT m a
 unsafeLiftFromIO a = do
   context <- get
   x <- liftIO (a context :: IO a)
   put context
   return x
 
-|]
+|] >>= applyDebug debugMode
 
-wrapBody = [r|
+wrapBody debugMode = [r|
 
-wrapIn :: FutharkObject wrapped raw => Context -> Ptr raw -> IO wrapped
+wrapIn :: (FutharkObject wrapped raw, (⍝)) => Context -> Ptr raw -> IO wrapped
 wrapIn context@(Context childCount pointer) rawObject = do
     modifyMVar_ childCount (\cc -> return $! (cc+1))
     referenceCounter <- newMVar 0
@@ -317,13 +322,13 @@ wrapIn context@(Context childCount pointer) rawObject = do
     where freeCall = (inContextWithError context $ \c -> freeFO c rawObject)
                   >> modifyMVar_ childCount (\cc -> return $! (cc-1))
 
-peekFree :: (Storable b) => Ptr b -> IO b
+peekFree :: (Storable b, (⍝)) => Ptr b -> IO b
 peekFree p = do
    pPeeked <- peek p
    free p
    return pPeeked
 
-peekFreeWrapIn :: (FutharkObject b raw) => Context -> Ptr (Ptr raw) -> IO b
+peekFreeWrapIn :: (FutharkObject b raw, (⍝)) => Context -> Ptr (Ptr raw) -> IO b
 peekFreeWrapIn context rawP = do
    rawPeeked <- peek rawP
    wrapped <- wrapIn context rawPeeked
@@ -383,9 +388,9 @@ from5d f cP eP (M.Sz5 d0 d1 d2 d3 d4) = f cP eP (fromIntegral d0)
                                                 (fromIntegral d3)
                                                 (fromIntegral d4)
 
-|]
+|] >>= applyDebug debugMode
 
-utilsBody = [r|
+utilsBody debugMode = [r|
 
 instance (FutharkArray array rawArray dim element)
   => Input array (M.Array M.S dim element) where
@@ -417,7 +422,7 @@ instance (FutharkArray array rawArray dim element)
           shape <- shapeFA c aP
           return shape
 
-boolToCBool :: Bool -> CBool
+boolToCBool :: (⍝) => Bool -> CBool
 boolToCBool True  = CBool 1
 boolToCBool False = CBool 0
 
@@ -512,7 +517,7 @@ toFutharkT7 (a, b, c, d, e, f, g) = do
     g' <- toFuthark g
     return (a', b', c', d', e', f', g')
 
-|]
+|] >>= applyDebug debugMode
 
 {--
 instance (Output a a', Output b b')

@@ -25,6 +25,9 @@ specific C = []
 specific OpenCL = [N "Control.Parallel.OpenCL (CLMem, CLCommandQueue)"]
 specific Cuda = [N "Foreign.CUDA.Ptr(DevicePtr(..))"]
 
+debugImport :: Import
+debugImport = N "GHC.Stack"
+
 nonLinearImports :: [Import]
 nonLinearImports =
   [ N "Control.Monad.Base"
@@ -54,10 +57,10 @@ linearImports =
   , N "Control.Monad.Catch"
   ]
 
-monadImports :: Bool -> [Import]
-monadImports useLinear = if useLinear then linearImports else nonLinearImports
+monadImports :: Bool -> Bool -> [Import]
+monadImports useLinear debugMode = [debugImport | debugMode] ++ if useLinear then linearImports else nonLinearImports
 
-rawHeader backend = haskellHeader
+rawHeader debugMode backend = haskellHeader
     []
     [ "ForeignFunctionInterface" ]
     []
@@ -66,10 +69,11 @@ rawHeader backend = haskellHeader
       , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..), CFile(..))"
       , N "Foreign.Ptr (Ptr)"
       ] ++ specific backend
+        ++ [debugImport | debugMode]
     )
 
 
-typeClassesHeader useLinear backend = haskellHeader
+typeClassesHeader useLinear debugMode backend = haskellHeader
     [ "FutharkObject", "FutharkArray"
     , "freeFO", "fromFO", "withFO", "wrapFO"
     , "addReferenceFO", "finalizeFO", "debugFO"
@@ -79,27 +83,27 @@ typeClassesHeader useLinear backend = haskellHeader
     ([ "MultiParamTypeClasses"
      , "FunctionalDependencies"
      , "TypeSynonymInstances"
-     ] ++ if useLinear then ["NoImplicitPrelude"] else []
+     ] ++ ["NoImplicitPrelude" | useLinear]
     )
     [ Q "Raw" "Raw", N "Fut" ]
     ( [ N "Foreign", Q "Data.Massiv.Array" "M"
       , N "Control.Concurrent"
-      ] ++ monadImports useLinear
+      ] ++ monadImports useLinear debugMode
     )
 
-configHeader backend = haskellHeader
+configHeader debugMode backend = haskellHeader
     []
     []
     [ Q "Raw" "Raw" ]
-    ( [ N "Foreign.C" ] ++ specific backend )
+    ( N "Foreign.C" : specific backend ++ [debugImport | debugMode])
 
-contextHeader backend = haskellHeader
+contextHeader debugMode backend = haskellHeader
     []
     []
     [Q "Raw" "Raw", N "Config" ]
-    [N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", N "System.Mem (performGC)"]
+    ([N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", N "System.Mem (performGC)"] ++ [debugImport | debugMode])
 
-futHeader useLinear backend =
+futHeader useLinear debugMode backend =
     haskellHeader
     [ "FutT", "Fut", "FutIO", "MonadFut(..)"
     , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
@@ -109,10 +113,10 @@ futHeader useLinear backend =
     )
     [ N "Context", N "Config" ]
     ( [
-      ] ++ monadImports useLinear
+      ] ++ monadImports useLinear debugMode
     )
 
-wrapHeader backend = haskellHeader
+wrapHeader debugMode backend = haskellHeader
     []
     [ "RankNTypes"
     , "FlexibleInstances"
@@ -120,33 +124,33 @@ wrapHeader backend = haskellHeader
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]
     [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses" ]
-    [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
-    , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", N "Control.Concurrent" ]
+    ([ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
+    , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", N "Control.Concurrent" ] ++ [debugImport | debugMode])
 
-typesHeader backend = haskellHeader
+typesHeader debugMode backend = haskellHeader
     []
     [ "RankNTypes", "ExistentialQuantification"
     , "MultiParamTypeClasses", "TypeSynonymInstances", "FlexibleInstances" ]
     [ Q "Raw" "Raw", N "Wrap", N "TypeClasses" ]
-    [ Q "Foreign" "F", Q "Data.Massiv.Array" "M"
+    ([ Q "Foreign" "F", Q "Data.Massiv.Array" "M"
     , Q "Control.Concurrent.MVar" "MV"
     , N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)"
     , N "Foreign.C.Types (CBool(..), CSize(..), CChar(..), CFile(..))"
     , N "Foreign.Ptr (Ptr)"
-    , N "Control.DeepSeq (rwhnf)" ]
+    , N "Control.DeepSeq (rwhnf)" ] ++ [debugImport | debugMode])
 
-entriesHeader backend = haskellHeader
+entriesHeader debugMode backend = haskellHeader
     []
     []
     [ Q "Raw" "Raw", Q "Context" "C", N "Fut (FutT)", Q "Fut" "Fut"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
-    [ N "Data.Int (Int8, Int16, Int32, Int64)"
+    ([ N "Data.Int (Int8, Int16, Int32, Int64)"
     , N "Data.Word (Word8, Word16, Word32, Word64)"
     , N "Control.Monad.IO.Class"
-    , Q "Foreign" "F", N "Foreign.C.Types" ]
+    , Q "Foreign" "F", N "Foreign.C.Types" ] ++ [debugImport | debugMode])
 
-utilsHeader backend = haskellHeader
+utilsHeader debugMode backend = haskellHeader
     []
     [ "RankNTypes"
     , "FlexibleContexts"
@@ -154,11 +158,11 @@ utilsHeader backend = haskellHeader
     , "MultiParamTypeClasses"
     , "UndecidableInstances" ]
     [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses", N "Wrap" ]
-    [ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
+    ([ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
 
-    , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU" ]
+    , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU" ] ++ [debugImport | debugMode])
 
-exportsHeader backend = haskellHeader
+exportsHeader debugMode backend = haskellHeader
     [ "module F" ]
     []
     [ N "Context as F"
@@ -167,4 +171,4 @@ exportsHeader backend = haskellHeader
     , N "Utils as F"
     , N "Fut as F"
     , N "Types as F"]
-    []
+    [debugImport | debugMode]
