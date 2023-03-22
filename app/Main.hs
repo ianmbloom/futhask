@@ -75,14 +75,14 @@ main = do
                                                                        ++ rawBody backend
                                                                        ++ dataWrappers
                                                                        ++ foreignEntries
-                                                                       ++ typeOps               )
-        , (Just "Entries"    , entriesHeader                debugMode, haskellEntries           )
-        , (Just "Types"      , typesHeader                  debugMode, haskellTypes ++ instances)
-        , (Just "TypeClasses", typeClassesHeader useLinear  debugMode, typeClassesBody          )
-        , (Just "Context"    , contextHeader                debugMode, contextBody              )
-        , (Just "Config"     , configHeader                 debugMode, configBody backend       )
-        , (Just "Fut"        , futHeader         useLinear  debugMode, futBody useLinear        )
-        , (Just "Wrap"       , wrapHeader                   debugMode, wrapBody                 )
-        , (Just "Utils"      , utilsHeader                  debugMode, utilsBody                )
+                                                                       ++ typeOps                 )
+        , (Just "Entries"    , entriesHeader                debugMode, haskellEntries             )
+        , (Just "Types"      , typesHeader                  debugMode, haskellTypes ++ instances  )
+        , (Just "TypeClasses", typeClassesHeader useLinear  debugMode, typeClassesBody debugMode  )
+        , (Just "Context"    , contextHeader                debugMode, contextBody debugMode      )
+        , (Just "Config"     , configHeader                 debugMode, configBody backend         )
+        , (Just "Fut"        , futHeader         useLinear  debugMode, futBody useLinear debugMode)
+        , (Just "Wrap"       , wrapHeader                   debugMode, wrapBody  debugMode        )
+        , (Just "Utils"      , utilsHeader                  debugMode, utilsBody debugMode        )
         , (Nothing, exportsHeader debugMode, "") ]
     putStrLn "Futhask wrapper generation complete."
