@@ -108,7 +108,7 @@ futHeader useLinear debugMode backend =
     [ "FutT", "Fut", "FutIO", "MonadFut(..)"
     , "runFutIn", "runFutWith", "runFut", "runFutTIn", "runFutTWith", "runFutT"
     , "unsafeFromFutIO", "unsafeLiftFromIO" ]
-    ([ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses", "ScopedTypeVariables" ]
+    ([ "RankNTypes", "ExistentialQuantification", "FlexibleInstances", "UndecidableInstances", "TypeFamilies", "MultiParamTypeClasses", "ScopedTypeVariables", "ConstraintKinds" ]
      ++ if useLinear then ["NoImplicitPrelude", "LinearTypes", "ApplicativeDo"] else []
     )
     [ N "Context", N "Config" ]
