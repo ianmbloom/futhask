@@ -62,7 +62,7 @@ monadImports useLinear debugMode = [debugImport | debugMode] ++ if useLinear the
 
 rawHeader debugMode backend = haskellHeader
     []
-    [ "ForeignFunctionInterface" ]
+    [ "ForeignFunctionInterface", "ConstraintKinds"]
     []
     ( [ N "Data.Int (Int8, Int16, Int32, Int64)"
       , N "Data.Word (Word8, Word16, Word32, Word64)"
@@ -83,6 +83,7 @@ typeClassesHeader useLinear debugMode backend = haskellHeader
     ([ "MultiParamTypeClasses"
      , "FunctionalDependencies"
      , "TypeSynonymInstances"
+     , "ConstraintKinds"
      ] ++ ["NoImplicitPrelude" | useLinear]
     )
     [ Q "Raw" "Raw", N "Fut" ]
@@ -93,13 +94,13 @@ typeClassesHeader useLinear debugMode backend = haskellHeader
 
 configHeader debugMode backend = haskellHeader
     []
-    []
+    ["ConstraintKinds"]
     [ Q "Raw" "Raw" ]
     ( N "Foreign.C" : specific backend ++ [debugImport | debugMode])
 
 contextHeader debugMode backend = haskellHeader
     []
-    []
+    ["ConstraintKinds"]
     [Q "Raw" "Raw", N "Config" ]
     ([N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C", N "Control.Concurrent", N "System.Mem (performGC)"] ++ [debugImport | debugMode])
 
@@ -122,7 +123,9 @@ wrapHeader debugMode backend = haskellHeader
     , "FlexibleInstances"
     , "FlexibleContexts"
     , "MultiParamTypeClasses"
-    , "UndecidableInstances" ]
+    , "UndecidableInstances"
+    , "ConstraintKinds"
+    ]
     [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses" ]
     ([ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
     , Q "Data.Massiv.Array" "M", Q "Data.Massiv.Array.Unsafe" "MU", N "Control.Concurrent" ] ++ [debugImport | debugMode])
@@ -130,7 +133,7 @@ wrapHeader debugMode backend = haskellHeader
 typesHeader debugMode backend = haskellHeader
     []
     [ "RankNTypes", "ExistentialQuantification"
-    , "MultiParamTypeClasses", "TypeSynonymInstances", "FlexibleInstances" ]
+    , "MultiParamTypeClasses", "TypeSynonymInstances", "FlexibleInstances", "ConstraintKinds" ]
     [ Q "Raw" "Raw", N "Wrap", N "TypeClasses" ]
     ([ Q "Foreign" "F", Q "Data.Massiv.Array" "M"
     , Q "Control.Concurrent.MVar" "MV"
@@ -142,7 +145,7 @@ typesHeader debugMode backend = haskellHeader
 
 entriesHeader debugMode backend = haskellHeader
     []
-    []
+    ["ConstraintKinds"]
     [ Q "Raw" "Raw", Q "Context" "C", N "Fut (FutT)", Q "Fut" "Fut"
     , Q "Wrap" "U", N "Types", Q "TypeClasses" "T" ]
     ([ N "Data.Int (Int8, Int16, Int32, Int64)"
@@ -156,7 +159,8 @@ utilsHeader debugMode backend = haskellHeader
     , "FlexibleContexts"
     , "FlexibleInstances"
     , "MultiParamTypeClasses"
-    , "UndecidableInstances" ]
+    , "UndecidableInstances"
+    , "ConstraintKinds" ]
     [ Q "Raw" "Raw", N "Context", N "Fut", N "TypeClasses", N "Wrap" ]
     ([ N "Foreign as F", Q "Foreign.Concurrent" "FC", N "Foreign.C"
 
